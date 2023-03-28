@@ -70,14 +70,20 @@ public class ConfigurationReader {
         NodeMetaData currNodeMetaData = allNodeMetaData.stream().filter(n -> n.host.equals(hostName))
                 .findFirst().orElse(null);
         networkInformation.nodeMetaData = currNodeMetaData;
-        markNeighbors(allNodeMetaData, currNodeMetaData);
+        markNeighbors(allNodeMetaData, currNodeMetaData, neighbourWeightsHashMap);
         return networkInformation;
     }
 
-    private void markNeighbors(List<NodeMetaData> allNodeMetaData, NodeMetaData currNodeMetaData) {
-        currNodeMetaData.neighborUIDs.forEach(uid -> {
-            currNodeMetaData.neighbors.add(allNodeMetaData.stream()
-                    .filter(nodeMetaData -> nodeMetaData.uid == uid).findFirst().orElse(null));
+    private void markNeighbors(List<NodeMetaData> allNodeMetaData, NodeMetaData currNodeMetaData,
+                               HashMap<Integer, ArrayList<NeighbourWeights>> neighbourWeightsHashMap) {
+
+        ArrayList<NeighbourWeights> neighbourWeights = neighbourWeightsHashMap.get(currNodeMetaData.uid);
+        neighbourWeights.forEach(nw -> {
+            NodeMetaData neigh = allNodeMetaData.stream().filter(node -> node.uid == nw.node).findFirst().orElse(null);
+            if (neigh != null) {
+                neigh.perspectiveWeight = nw.value;
+            }
+            currNodeMetaData.neighbors.add(neigh);
         });
     }
 }
