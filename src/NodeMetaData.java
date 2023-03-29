@@ -10,7 +10,9 @@ public class NodeMetaData {
     List<NodeMetaData> neighbors;
     Map<Integer, Integer> neighborUIDsAndWeights;
     int leaderUID;
+    int parentUID;
     int perspectiveWeight;
+    List<String> msgQueue;
 
     AtomicBoolean isConnected = new AtomicBoolean(false);
 

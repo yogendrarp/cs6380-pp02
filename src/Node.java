@@ -1,6 +1,7 @@
 import java.io.FileNotFoundException;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
+import java.util.LinkedList;
 
 public class Node {
     public static void main(String[] args) throws UnknownHostException, FileNotFoundException {
@@ -33,9 +34,26 @@ public class Node {
         String configFileName = "configuration";
         NetworkInformation networkInformation;
         boolean leaderElected = false;
-        NodeMetaData nodeMetaData;
 
-        networkInformation =  configurationReader.readConfiguration(hostName, configFileName, env);
+        networkInformation = configurationReader.readConfiguration(hostName, configFileName, env);
+        NodeMetaData nodeMetaData = networkInformation.nodeMetaData;
+
+        nodeMetaData.neighbors.forEach(neighbor -> {
+            neighbor.msgQueue = new LinkedList<>();
+        });
+
+
+
+        // If my parent is not set, generate SEARCH message
+        while (nodeMetaData.parentUID == -1) {
+
+
+            //process messages you recieve
+        }
+
+        // Once parent is set, I just compute MWOE
+
+
     }
 
     /**

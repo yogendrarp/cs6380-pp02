@@ -70,6 +70,8 @@ public class ConfigurationReader {
         NodeMetaData currNodeMetaData = allNodeMetaData.stream().filter(n -> n.host.equals(hostName))
                 .findFirst().orElse(null);
         networkInformation.nodeMetaData = currNodeMetaData;
+        currNodeMetaData.leaderUID = currNodeMetaData.uid;
+        currNodeMetaData.parentUID = -1;
         markNeighbors(allNodeMetaData, currNodeMetaData, neighbourWeightsHashMap);
         return networkInformation;
     }
