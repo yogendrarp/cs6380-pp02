@@ -93,9 +93,7 @@ public class Node {
                     }
                 });
                 //Sends TEST message to shortest neighbor
-                NodeMetaData shortestDistNeighbor = nodeMetaData.neighbors.stream()
-                        .filter(nodeMetaData1 -> nodeMetaData1.uid == smallestDistNeighborUID.get())
-                        .findFirst().orElse(null);
+                NodeMetaData shortestDistNeighbor = getNodeFromID(nodeMetaData, smallestDistNeighborUID.get());
                 if (shortestDistNeighbor == null) {
                     System.out.println("Fatal Error, node doesnt match neighbor UID");
                     System.exit(-1);
@@ -105,23 +103,52 @@ public class Node {
                 while (inputMessages.isEmpty()) {
 
                 }
-                //Since I am sending one message, I will expect one messge back.
+                //Since I am sending one message, I will expect one message back.
                 String message = inputMessages.poll();
+                boolean acceptSent = false;
                 if (message.startsWith("TEST")) {
                     //If my UID is smaller and its my shortest edge, send accept.
                     //Check my edges, if the test is my smallest neighbor and my UID is smaller, send ACCEPT
                     //Check my edges, if the test is my smallest neight and my UID is bigger, send REJECT
+                    String[] messageSplit = message.split(",");
+                    int messageUID = Integer.parseInt(messageSplit[1]);
+                    NodeMetaData recievedFrom = getNodeFromID(nodeMetaData, messageUID);
+                    if (messageUID == shortestDistNeighbor.uid) {
+                        String msgToSend = "";
+                        if (nodeMetaData.uid < messageUID) {
+                            //send accept
+                            msgToSend = String.format(Messages.ACCEPT.name(), nodeMetaData.uid);
+                        } else {
+                            //send reject
+                            msgToSend = String.format(Messages.REJECT.name(), nodeMetaData.uid);
+                        }
+                        recievedFrom.msgQueue.add(msgToSend);
+                    }
                 }
                 while (inputMessages.isEmpty()) {
 
                 }
                 message = inputMessages.poll();
-                //It will be either REJECT or ACCEPT, if reject, you are a non contender
+                //It will be either REJECT or ACCEPT, if reject, you are a non contender// what if 2 accepts? not possible?
                 if (message.startsWith("ACCEPT")) {
                     //Send ADD node message
+                    // Add a neighbor as part of tree
+                    String[] messageSplit = message.split(",");
+                    int msgUID = Integer.parseInt(messageSplit[1]);
+                    NodeMetaData msgRcvdFromNode = getNodeFromID(nodeMetaData, msgUID);
+                    msgRcvdFromNode.status = 1;
+                    msgRcvdFromNode.msgQueue.add(String.format(format, ))
+
                 } else if (message.startsWith("REJECT")) {
-                    //I am a child node and now expect an ADD message or
+                    //I am a child node and now expect an ADD message or nothing at all.
+                    //if I have sent an accept already, I expect a NULL or ADD else inform that you are not a contender and
+                    //go to next phase
+                    if (acceptSent) {
+                        //expect a NULL or ADD else ignore and move on to next phase
+                    }
+                    //Send the synchronizer and remove your contendership
                 }
+
             }
 
             //process messages you recieve
@@ -130,6 +157,13 @@ public class Node {
         // Once parent is set, I just compute MWOE
 
 
+    }
+
+    static NodeMetaData getNodeFromID(NodeMetaData nodeMetaData, int uid) {
+        NodeMetaData shortestDistNeighbor = nodeMetaData.neighbors.stream()
+                .filter(nodeMetaData1 -> nodeMetaData1.uid == uid)
+                .findFirst().orElse(null);
+        return shortestDistNeighbor;
     }
 
     /**

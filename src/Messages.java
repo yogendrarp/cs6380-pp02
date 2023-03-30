@@ -1,4 +1,9 @@
+import java.util.Locale;
+
 public enum Messages {
     ENQUIRY,
-    TEST
+    TEST,
+    REJECT,
+    ACCEPT,
+    ADD;
 }
