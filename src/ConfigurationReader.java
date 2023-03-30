@@ -71,6 +71,7 @@ public class ConfigurationReader {
                 .findFirst().orElse(null);
         networkInformation.nodeMetaData = currNodeMetaData;
         currNodeMetaData.leaderUID = currNodeMetaData.uid;
+        currNodeMetaData.treeNodes = new ArrayList<>();
         currNodeMetaData.parentUID = -1;
         markNeighbors(allNodeMetaData, currNodeMetaData, neighbourWeightsHashMap);
         return networkInformation;

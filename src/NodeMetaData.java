@@ -8,6 +8,7 @@ public class NodeMetaData {
     String hostUrl;
     int port;
     List<NodeMetaData> neighbors;
+    List<Integer> treeNodes;
     Map<Integer, Integer> neighborUIDsAndWeights;
     int leaderUID;
     int parentUID;
