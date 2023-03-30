@@ -10,10 +10,12 @@ class ListenerThread implements Runnable {
     ServerSocket serverSocket;
     Socket serverAcceptSocket;
     List<Thread> createdThreads = new ArrayList<>();
+    Queue<String> inputMessages;
     ArrayList<ListenerThreadHandler> listenerThreads = new ArrayList<>();
 
-    public ListenerThread(NetworkInformation networkInformation) {
+    public ListenerThread(NetworkInformation networkInformation, Queue<String> inputMessages) {
         this.networkInformation = networkInformation;
+        this.inputMessages = inputMessages;
     }
 
     @Override
@@ -23,7 +25,7 @@ class ListenerThread implements Runnable {
             serverSocket = new ServerSocket(nodeMetaData.port);
             serverSocket.setReuseAddress(true);
             serverAcceptSocket = serverSocket.accept();//accept unlimited requests, reuses the address
-            ListenerThreadHandler listenerThreadHandler = new ListenerThreadHandler(serverAcceptSocket);
+            ListenerThreadHandler listenerThreadHandler = new ListenerThreadHandler(serverAcceptSocket,inputMessages);
             listenerThreads.add(listenerThreadHandler);
             Thread thread = new Thread(listenerThreadHandler);
             createdThreads.add(thread);

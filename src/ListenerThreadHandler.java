@@ -1,13 +1,16 @@
 import java.io.DataInputStream;
 import java.io.IOException;
 import java.net.Socket;
+import java.util.Queue;
 
 public class ListenerThreadHandler implements Runnable {
 
     private Socket clientSocket;
+    Queue<String> inputMessages;
 
-    public ListenerThreadHandler(Socket socket) {
+    public ListenerThreadHandler(Socket socket, Queue<String> inputMessages) {
         this.clientSocket = socket;
+        this.inputMessages = inputMessages;
     }
 
     @Override
@@ -22,7 +25,7 @@ public class ListenerThreadHandler implements Runnable {
                     byte[] line = new byte[length];
                     inputStream.readFully(line);
                     String msg = new String(line);
-                    System.out.println("Msg received is : " + msg);
+                    inputMessages.add(msg);
                 }
             } catch (Exception e) {
 
