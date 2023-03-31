@@ -122,11 +122,22 @@ public class Node {
             }
             shortestDistNeighbor.msgQueue.add(String.format(format, Messages.TEST, nodeMetaData.uid));
             System.out.println(String.format("Shortest neighbor node is with UID: %d", smallestDistNeighborUID));
-            boolean acceptSent = false;
+
+            //Phase 0
             while (!phaseOneCompleted) {
-                while (inputMessages.isEmpty()) {
+                Thread.sleep(500);
+                int tempPhase = synchronizerMessenger(Messages.ENQUIRY.value);
+                if (tempPhase > phase) {
+                    phase = tempPhase;
+                    phaseOneCompleted = true;
+                    break;
                 }
-                //Since I am sending one message, I will expect one message back.
+
+                if (inputMessages.size() <= 0) {
+                    Thread.sleep(500);
+                    continue;
+                }
+
                 String message = inputMessages.poll();
                 Thread.sleep(1000);
                 System.out.printf("Msg recieved is %s%n", message);
@@ -142,7 +153,6 @@ public class Node {
                         if (nodeMetaData.uid < messageUID) {
                             //send accept
                             msgToSend = String.format(format, Messages.ACCEPT.value, nodeMetaData.uid);
-                            acceptSent = true;
                         } else {
                             //send reject
                             msgToSend = String.format(format, Messages.REJECT.value, nodeMetaData.uid);
@@ -150,29 +160,30 @@ public class Node {
                     } else {
                         msgToSend = String.format(format, Messages.REJECT.value, nodeMetaData.uid);
                     }
-                    System.out.println("Message to send is " + msgToSend + " to node with UID "+ recievedFrom.uid);
+                    System.out.println("Message to send is " + msgToSend + " to node with UID " + recievedFrom.uid);
                     recievedFrom.msgQueue.add(msgToSend);
-                    Thread.sleep(500);
+
                 } else if (message.startsWith(Messages.ACCEPT.value)) {
                     //Send ADD node message
                     // Add a neighbor as part of tree
-                    System.out.println("In accept");
                     String[] messageSplit = message.split(",");
                     int msgUID = Integer.parseInt(messageSplit[1]);
                     NodeMetaData msgRcvdFromNode = getNodeFromID(nodeMetaData, msgUID);
                     msgRcvdFromNode.status = 1;
                     msgRcvdFromNode.msgQueue.add(String.format(format, Messages.ADD.value, nodeMetaData.uid));
                     synchronizerMessenger(Messages.COMPLETE_CONTENDER.value);
-                    Thread.sleep(500);
+
                 } else if (message.startsWith(Messages.REJECT.value)) {
                     //Send the synchronizer and remove your contendership
                     System.out.println("Removing my contendership");
-                    Thread.sleep(500);
+
                     synchronizerMessenger(Messages.COMPLETE_NONCONTENDER.value);
                 } else if (message.startsWith(Messages.ADD.value)) {
-                    Thread.sleep(500);
+
                     String[] messageSplit = message.split(",");
                     int messageUID = Integer.parseInt(messageSplit[1]);
+                    System.out.println("Adding " + messageUID + " parent node");
+
                     nodeMetaData.parentUID = messageUID;
                     NodeMetaData parentNode = getNodeFromID(nodeMetaData, nodeMetaData.parentUID);
                     parentNode.status = 0;
@@ -180,11 +191,12 @@ public class Node {
                 } else {
                     System.out.println("Junk message");
                 }
-                //
-                System.out.println("next loop");
+
             }
+            System.out.println("Phase 0 completed");
             //Some logic to mark phase 1 complete
         }
+        System.out.println("Phase is " + phase);
 
         // Once parent is set, I just compute MWOE
 
@@ -226,7 +238,6 @@ public class Node {
 
     static int synchronizerMessenger(String message) throws IOException {
         Socket synchronizerSocket = null;
-        System.out.println("Sending message "+ message+ " to synchronizer");
         try {
             synchronizerSocket = new Socket(SYNCHRONIZER_HOST, SYNCPORT);
             DataOutputStream synchronizerOutputStream = new DataOutputStream(synchronizerSocket.getOutputStream());
@@ -238,7 +249,6 @@ public class Node {
                 byte[] line = new byte[respLength];
                 synchronizerInputStream.readFully(line);
                 String msgResp = new String(line);
-                System.out.println("Message from Synchronizer "+ msgResp);
                 try {
                     int phase = Integer.parseInt(msgResp);
                     return phase;
