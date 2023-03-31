@@ -17,15 +17,15 @@ public class SenderThread implements Runnable {
         try {
             int counter = 1;
             //Wait for the connections
-            while (socket == null || counter < 11) {
+            while (socket == null && counter < 30) {
                 try {
                     socket = new Socket(neighbor.hostUrl, neighbor.port);
                     neighbor.isConnected.set(true);
                 } catch (IOException e) {
-                    System.out.println("Waiting for connection...");
+                    System.out.println("Waiting for connection...failed to connect to" + neighbor.uid);
                 }
                 counter++;
-                Thread.sleep(2000);
+                Thread.sleep(3000);
             }
             System.out.println("Connected to " + neighbor.uid);
 

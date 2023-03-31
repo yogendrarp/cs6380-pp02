@@ -24,13 +24,15 @@ class ListenerThread implements Runnable {
             NodeMetaData nodeMetaData = networkInformation.nodeMetaData;
             serverSocket = new ServerSocket(nodeMetaData.port);
             serverSocket.setReuseAddress(true);
-            serverAcceptSocket = serverSocket.accept();//accept unlimited requests, reuses the address
-            ListenerThreadHandler listenerThreadHandler = new ListenerThreadHandler(serverAcceptSocket,inputMessages);
-            listenerThreads.add(listenerThreadHandler);
-            Thread thread = new Thread(listenerThreadHandler);
-            createdThreads.add(thread);
-            thread.start();
-            serverSocket.close();
+            while (true) {
+                serverAcceptSocket = serverSocket.accept();//accept unlimited requests, reuses the address
+                ListenerThreadHandler listenerThreadHandler = new ListenerThreadHandler(serverAcceptSocket, inputMessages);
+                listenerThreads.add(listenerThreadHandler);
+                Thread thread = new Thread(listenerThreadHandler);
+                createdThreads.add(thread);
+                thread.start();
+            }
+            //serverSocket.close();
         } catch (Exception e) {
             e.printStackTrace();
         }

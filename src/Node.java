@@ -3,6 +3,7 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.Socket;
+import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Queue;
@@ -92,7 +93,7 @@ public class Node {
                 }
             }
             allNodesNotConnected = !allCon;
-            Thread.sleep(100);
+            Thread.sleep(2000);
         }
         System.out.println("All nodes are connected, waiting to stabilize");
         Thread.sleep(10000);
@@ -109,25 +110,30 @@ public class Node {
              * */
 
             if (phase == 0) {
-                AtomicInteger smallestDistNeighbor = new AtomicInteger(Integer.MAX_VALUE);
-                AtomicInteger smallestDistNeighborUID = new AtomicInteger(Integer.MIN_VALUE); // this should not be UID, its okay here
-                System.out.println(smallestDistNeighbor.get()+","+smallestDistNeighborUID.get());
-                nodeMetaData.neighborUIDsAndWeights.keySet().forEach(key -> {
-                    if (smallestDistNeighbor.get() < nodeMetaData.neighborUIDsAndWeights.get(key)
-                            || (smallestDistNeighbor.get() == nodeMetaData.neighborUIDsAndWeights.get(key) && key > smallestDistNeighborUID.get())) {
-                        smallestDistNeighbor.set(nodeMetaData.neighborUIDsAndWeights.get(key));
-                        smallestDistNeighborUID.set(key);
+                int smallestDistNeighborDistance = Integer.MAX_VALUE; // distam
+                int smallestDistNeighborUID = Integer.MIN_VALUE; // this should not be UID, its okay here
+
+
+                List<Integer> keys = nodeMetaData.neighborUIDsAndWeights.keySet().stream().toList();
+                for (int i = 0; i < keys.size(); i++) {
+                    int _tempUID = keys.get(i);
+                    int _val = nodeMetaData.neighborUIDsAndWeights.get(keys.get(i));
+                    if ((smallestDistNeighborDistance > _val)
+                            ||
+                            (smallestDistNeighborDistance == _val && _tempUID > smallestDistNeighborUID)) {
+                        smallestDistNeighborDistance = _val;
+                        smallestDistNeighborUID = _tempUID;
                     }
-                    System.out.println(smallestDistNeighbor.get()+","+smallestDistNeighborUID.get());
-                });
+                }
+
                 //Sends TEST message to shortest neighbor
-                NodeMetaData shortestDistNeighbor = getNodeFromID(nodeMetaData, smallestDistNeighborUID.get());
+                NodeMetaData shortestDistNeighbor = getNodeFromID(nodeMetaData, smallestDistNeighborUID);
                 if (shortestDistNeighbor == null) {
                     System.out.println("Fatal Error, node doesnt match neighbor UID");
                     System.exit(-1);
                 }
                 shortestDistNeighbor.msgQueue.add(String.format(format, Messages.TEST, nodeMetaData.uid));
-                System.out.println(String.format("Shortest neighbor node is with UID: %d", smallestDistNeighborUID.get()));
+                System.out.println(String.format("Shortest neighbor node is with UID: %d", smallestDistNeighborUID));
 
                 while (inputMessages.isEmpty()) {
                 }
