@@ -1,5 +1,8 @@
+import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileNotFoundException;
+import java.io.FileReader;
+import java.io.IOException;
 import java.lang.reflect.Array;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -9,23 +12,23 @@ import java.util.Scanner;
 public class ConfigurationReader {
 
     /***
-     * read configuration
+     * read configuration.txt
      * @param hostName
      * @param configFileName
      * @param env
      * @return
      */
-    public NetworkInformation readConfiguration(String hostName, String configFileName, String env) throws FileNotFoundException {
-        File configFile = new File(configFileName);
-        Scanner fileReader = new Scanner(configFile);
+    public NetworkInformation readConfiguration(String hostName, String configFileName, String env) throws IOException {
+        BufferedReader in = new BufferedReader(new FileReader(configFileName));
+
         NetworkInformation networkInformation = new NetworkInformation();
         HashMap<Integer, ArrayList<NeighbourWeights>> neighbourWeightsHashMap = new HashMap<>();
         int numberOfNodes = -1;
         int counter = 0;
         boolean uidObtained = false;
         List<NodeMetaData> allNodeMetaData = new ArrayList<>();
-        while (fileReader.hasNextLine()) {
-            String line = fileReader.nextLine();
+        String line = in.readLine();
+        while (line != null) {
             if (Character.isDigit(line.charAt(0)) || line.charAt(0) == '(') {
                 if (numberOfNodes == -1) {
                     numberOfNodes = Integer.parseInt(line);
@@ -65,14 +68,21 @@ public class ConfigurationReader {
                     neighbourWeightsHashMap.put(uid2, nw2);
                 }
             }
+            line = in.readLine();
         }
-        fileReader.close();
+        in.close();
+
         NodeMetaData currNodeMetaData = allNodeMetaData.stream().filter(n -> n.host.equals(hostName))
                 .findFirst().orElse(null);
+
         networkInformation.nodeMetaData = currNodeMetaData;
         currNodeMetaData.leaderUID = currNodeMetaData.uid;
         currNodeMetaData.treeNodes = new ArrayList<>();
         currNodeMetaData.parentUID = -1;
+        ArrayList<NeighbourWeights> neighborWeights = neighbourWeightsHashMap.get(currNodeMetaData.uid);
+        neighborWeights.forEach(nw -> {
+            currNodeMetaData.neighborUIDsAndWeights.put(nw.node, nw.value);
+        });
         markNeighbors(allNodeMetaData, currNodeMetaData, neighbourWeightsHashMap);
         return networkInformation;
     }

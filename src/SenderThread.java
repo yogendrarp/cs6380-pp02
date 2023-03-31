@@ -25,7 +25,7 @@ public class SenderThread implements Runnable {
                     System.out.println("Waiting for connection...");
                 }
                 counter++;
-                Thread.sleep(500);
+                Thread.sleep(2000);
             }
             System.out.println("Connected to " + neighbor.uid);
 

@@ -38,10 +38,10 @@ public class Node {
         }
 
         ConfigurationReader configurationReader = new ConfigurationReader();
-        String configFileName = "configuration";
+        String configFileName = "C:\\Users\\yogen\\Documents\\D\\Code\\cs6380-pp02\\src\\configuration.txt";
         NetworkInformation networkInformation;
 
-
+        System.out.println(hostName + "," + configFileName + "," + env);
         networkInformation = configurationReader.readConfiguration(hostName, configFileName, env);
         NodeMetaData nodeMetaData = networkInformation.nodeMetaData;
         Queue<String> inputMessages = new LinkedList<>();
@@ -95,7 +95,7 @@ public class Node {
             Thread.sleep(100);
         }
         System.out.println("All nodes are connected, waiting to stabilize");
-        Thread.sleep(5000);
+        Thread.sleep(10000);
 
         /*
          *  if you recieve search message and the component id is different than urs, and if you recieve search message
@@ -110,13 +110,15 @@ public class Node {
 
             if (phase == 0) {
                 AtomicInteger smallestDistNeighbor = new AtomicInteger(Integer.MAX_VALUE);
-                AtomicInteger smallestDistNeighborUID = new AtomicInteger(Integer.MAX_VALUE); // this should not be UID, its okay here
+                AtomicInteger smallestDistNeighborUID = new AtomicInteger(Integer.MIN_VALUE); // this should not be UID, its okay here
+                System.out.println(smallestDistNeighbor.get()+","+smallestDistNeighborUID.get());
                 nodeMetaData.neighborUIDsAndWeights.keySet().forEach(key -> {
                     if (smallestDistNeighbor.get() < nodeMetaData.neighborUIDsAndWeights.get(key)
-                            || (smallestDistNeighbor.get() == nodeMetaData.neighborUIDsAndWeights.get(key) && key < smallestDistNeighborUID.get())) {
+                            || (smallestDistNeighbor.get() == nodeMetaData.neighborUIDsAndWeights.get(key) && key > smallestDistNeighborUID.get())) {
                         smallestDistNeighbor.set(nodeMetaData.neighborUIDsAndWeights.get(key));
                         smallestDistNeighborUID.set(key);
                     }
+                    System.out.println(smallestDistNeighbor.get()+","+smallestDistNeighborUID.get());
                 });
                 //Sends TEST message to shortest neighbor
                 NodeMetaData shortestDistNeighbor = getNodeFromID(nodeMetaData, smallestDistNeighborUID.get());
@@ -225,10 +227,10 @@ public class Node {
     static void printHelpMessage() {
         System.out.println("The system needs some parameters to function");
         System.out.println();
-        System.out.println("If the environment is test, pass 3 args in the format \"java Node test dc01.utdallas.edu\"");
+        System.out.println("If the environment is test, pass 2 args in the format \"java Node test dc01.utdallas.edu\"");
         System.out.println("the first arg will be the environment, second will be the id of the node to be assumed from config file as all systems run on localhost while development");
         System.out.println("The third argument indicates if the node is initiator or not opts true or false");
         System.out.println();
-        System.out.println("If the environment is production, pass 2 args in the format \"java Node prod\"");
+        System.out.println("If the environment is production, pass 1 args in the format \"java Node prod\"");
     }
 }
