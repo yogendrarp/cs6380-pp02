@@ -10,11 +10,12 @@ import java.util.Queue;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class Node {
+    static String SYNCHRONIZER_HOST = "localhost"; //Change to dc01
+    static int SYNCPORT = 1993;
+
     public static void main(String[] args) throws IOException, InterruptedException {
         //Uses the hostname to get the information about its neighbor nodes
         String hostName = InetAddress.getLocalHost().getHostName();
-        String synchronizerHost = "localhost";//Change to dc01
-        int syncport = 1993;
         String env = "";
         //args have to be passed, used for both localhost and prod based testing
         if (args.length == 2) {
@@ -52,20 +53,8 @@ public class Node {
         });
 
 
-        Socket synchronizerSocket = null;
-        synchronizerSocket = new Socket(synchronizerHost, syncport);
-        DataOutputStream synchronizerOutputStream = new DataOutputStream(synchronizerSocket.getOutputStream());
-        DataInputStream synchronizerInputStream = new DataInputStream(synchronizerSocket.getInputStream());
-        int phase = -1;
-        synchronizerOutputStream.writeInt(Messages.ENQUIRY.name().length());
-        synchronizerOutputStream.writeBytes(Messages.ENQUIRY.name());
-        int respLength = synchronizerInputStream.readInt();
-        if (respLength > 0) {
-            byte[] line = new byte[respLength];
-            synchronizerInputStream.readFully(line);
-            String msgResp = new String(line);
-            phase = Integer.parseInt(msgResp);
-        }
+        int phase = synchronizerMessenger(Messages.ENQUIRY.value);
+
         System.out.println("Phase is " + phase);
         String format = "%s,%s";
 
@@ -108,33 +97,32 @@ public class Node {
             /*
              * Just send TEST message to shortest distance neighbor
              * */
+            boolean phaseOneCompleted = false;
+            int smallestDistNeighborDistance = Integer.MAX_VALUE; // distam
+            int smallestDistNeighborUID = Integer.MIN_VALUE; // this should not be UID, its okay here
 
-            if (phase == 0) {
-                int smallestDistNeighborDistance = Integer.MAX_VALUE; // distam
-                int smallestDistNeighborUID = Integer.MIN_VALUE; // this should not be UID, its okay here
 
-
-                List<Integer> keys = nodeMetaData.neighborUIDsAndWeights.keySet().stream().toList();
-                for (int i = 0; i < keys.size(); i++) {
-                    int _tempUID = keys.get(i);
-                    int _val = nodeMetaData.neighborUIDsAndWeights.get(keys.get(i));
-                    if ((smallestDistNeighborDistance > _val)
-                            ||
-                            (smallestDistNeighborDistance == _val && _tempUID > smallestDistNeighborUID)) {
-                        smallestDistNeighborDistance = _val;
-                        smallestDistNeighborUID = _tempUID;
-                    }
+            List<Integer> keys = nodeMetaData.neighborUIDsAndWeights.keySet().stream().toList();
+            for (int i = 0; i < keys.size(); i++) {
+                int _tempUID = keys.get(i);
+                int _val = nodeMetaData.neighborUIDsAndWeights.get(keys.get(i));
+                if ((smallestDistNeighborDistance > _val)
+                        ||
+                        (smallestDistNeighborDistance == _val && _tempUID > smallestDistNeighborUID)) {
+                    smallestDistNeighborDistance = _val;
+                    smallestDistNeighborUID = _tempUID;
                 }
+            }
 
-                //Sends TEST message to shortest neighbor
-                NodeMetaData shortestDistNeighbor = getNodeFromID(nodeMetaData, smallestDistNeighborUID);
-                if (shortestDistNeighbor == null) {
-                    System.out.println("Fatal Error, node doesnt match neighbor UID");
-                    System.exit(-1);
-                }
-                shortestDistNeighbor.msgQueue.add(String.format(format, Messages.TEST, nodeMetaData.uid));
-                System.out.println(String.format("Shortest neighbor node is with UID: %d", smallestDistNeighborUID));
-
+            //Sends TEST message to shortest neighbor
+            NodeMetaData shortestDistNeighbor = getNodeFromID(nodeMetaData, smallestDistNeighborUID);
+            if (shortestDistNeighbor == null) {
+                System.out.println("Fatal Error, node doesnt match neighbor UID");
+                System.exit(-1);
+            }
+            shortestDistNeighbor.msgQueue.add(String.format(format, Messages.TEST, nodeMetaData.uid));
+            System.out.println(String.format("Shortest neighbor node is with UID: %d", smallestDistNeighborUID));
+            while (!phaseOneCompleted) {
                 while (inputMessages.isEmpty()) {
                 }
                 //Since I am sending one message, I will expect one message back.
@@ -160,12 +148,7 @@ public class Node {
                         recievedFrom.msgQueue.add(msgToSend);
                     }
                 }
-                while (inputMessages.isEmpty()) {
-                }
-                message = inputMessages.poll();
-                System.out.println(String.format("Msg recieved is %s", message));
-                //It will be either REJECT or ACCEPT, if reject, you are a non contender
-                if (message.startsWith(Messages.ACCEPT.value)) {
+                else if (message.startsWith(Messages.ACCEPT.value)) {
                     //Send ADD node message
                     // Add a neighbor as part of tree
                     String[] messageSplit = message.split(",");
@@ -173,9 +156,7 @@ public class Node {
                     NodeMetaData msgRcvdFromNode = getNodeFromID(nodeMetaData, msgUID);
                     msgRcvdFromNode.status = 1;
                     msgRcvdFromNode.msgQueue.add(String.format(format, Messages.ADD.value));
-                    String msgToSend = Messages.COMPLETE_CONTENDER.value;
-                    synchronizerOutputStream.writeInt(msgToSend.length());
-                    synchronizerOutputStream.writeBytes(msgToSend);
+                    synchronizerMessenger(Messages.COMPLETE_CONTENDER.value);
                 } else if (message.startsWith(Messages.REJECT.value)) {
                     //I am a child node and now expect an ADD message or nothing at all.
                     //if I have sent an accept already, I expect a NULL or ADD else inform that you are not a contender and
@@ -197,9 +178,8 @@ public class Node {
                     }
                     //Send the synchronizer and remove your contendership
                 }
-
+                //
             }
-            //
         }
 
         // Once parent is set, I just compute MWOE
@@ -238,5 +218,33 @@ public class Node {
         System.out.println("The third argument indicates if the node is initiator or not opts true or false");
         System.out.println();
         System.out.println("If the environment is production, pass 1 args in the format \"java Node prod\"");
+    }
+
+    static int synchronizerMessenger(String message) throws IOException {
+        Socket synchronizerSocket = null;
+        try {
+            synchronizerSocket = new Socket(SYNCHRONIZER_HOST, SYNCPORT);
+            DataOutputStream synchronizerOutputStream = new DataOutputStream(synchronizerSocket.getOutputStream());
+            DataInputStream synchronizerInputStream = new DataInputStream(synchronizerSocket.getInputStream());
+            synchronizerOutputStream.writeInt(message.length());
+            synchronizerOutputStream.writeBytes(message);
+            int respLength = synchronizerInputStream.readInt();
+            if (respLength > 0) {
+                byte[] line = new byte[respLength];
+                synchronizerInputStream.readFully(line);
+                String msgResp = new String(line);
+                try {
+                    int phase = Integer.parseInt(msgResp);
+                    return phase;
+                } catch (NumberFormatException e) {
+                    return 0;
+                }
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }finally {
+            synchronizerSocket.close();
+        }
+        return 0;
     }
 }
