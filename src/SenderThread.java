@@ -29,6 +29,22 @@ public class SenderThread implements Runnable {
             }
             System.out.println("Connected to " + neighbor.uid);
 
+            outputStream = new DataOutputStream(socket.getOutputStream());
+
+            while (true) {
+                System.out.print("");
+                try {
+                    if (!(neighbor.msgQueue.isEmpty())) {
+                        String msg = neighbor.msgQueue.poll();
+                        outputStream.writeInt(msg.length());
+                        outputStream.writeBytes(msg);
+                    }
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+                Thread.sleep(1000);
+            }
+
         } catch (IOException | InterruptedException e) {
 
         }

@@ -1,5 +1,6 @@
 import java.util.List;
 import java.util.Map;
+import java.util.Queue;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 public class NodeMetaData {
@@ -13,7 +14,7 @@ public class NodeMetaData {
     int leaderUID;
     int parentUID;
     int perspectiveWeight;
-    List<String> msgQueue;
+    Queue<String> msgQueue;
     int status;//-1,0,1 -1 is unknown, 0 is parent, 1 is child
 
     AtomicBoolean isConnected = new AtomicBoolean(false);
