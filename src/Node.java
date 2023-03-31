@@ -122,12 +122,13 @@ public class Node {
             }
             shortestDistNeighbor.msgQueue.add(String.format(format, Messages.TEST, nodeMetaData.uid));
             System.out.println(String.format("Shortest neighbor node is with UID: %d", smallestDistNeighborUID));
+            boolean acceptSent = false;
             while (!phaseOneCompleted) {
                 while (inputMessages.isEmpty()) {
                 }
                 //Since I am sending one message, I will expect one message back.
                 String message = inputMessages.poll();
-                boolean acceptSent = false;
+                Thread.sleep(1000);
                 System.out.println(String.format("Msg recieved is %s", message));
                 if (message.startsWith(Messages.TEST.value)) {
                     //If my UID is smaller and its my shortest edge, send accept.
@@ -135,28 +136,35 @@ public class Node {
                     //Check my edges, if the test is my smallest neight and my UID is bigger, send REJECT
                     String[] messageSplit = message.split(",");
                     int messageUID = Integer.parseInt(messageSplit[1]);
+                    System.out.println("Message UID is " + messageUID);
+                    System.out.println("Shortest neigh uid is " + shortestDistNeighbor.uid);
                     NodeMetaData recievedFrom = getNodeFromID(nodeMetaData, messageUID);
                     if (messageUID == shortestDistNeighbor.uid) {
                         String msgToSend = "";
+                        System.out.println("Should send some message, "+ nodeMetaData.uid+", messageUID is "+ messageUID);
                         if (nodeMetaData.uid < messageUID) {
                             //send accept
                             msgToSend = String.format(Messages.ACCEPT.value, nodeMetaData.uid);
+                            acceptSent = true;
                         } else {
                             //send reject
                             msgToSend = String.format(Messages.REJECT.value, nodeMetaData.uid);
                         }
+                        System.out.println("Message to send is "+ msgToSend);
                         recievedFrom.msgQueue.add(msgToSend);
                     }
-                }
-                else if (message.startsWith(Messages.ACCEPT.value)) {
+                    Thread.sleep(500);
+                } else if (message.startsWith(Messages.ACCEPT.value)) {
                     //Send ADD node message
                     // Add a neighbor as part of tree
+                    System.out.println("In accept");
                     String[] messageSplit = message.split(",");
                     int msgUID = Integer.parseInt(messageSplit[1]);
                     NodeMetaData msgRcvdFromNode = getNodeFromID(nodeMetaData, msgUID);
                     msgRcvdFromNode.status = 1;
                     msgRcvdFromNode.msgQueue.add(String.format(format, Messages.ADD.value));
                     synchronizerMessenger(Messages.COMPLETE_CONTENDER.value);
+                    Thread.sleep(500);
                 } else if (message.startsWith(Messages.REJECT.value)) {
                     //I am a child node and now expect an ADD message or nothing at all.
                     //if I have sent an accept already, I expect a NULL or ADD else inform that you are not a contender and
@@ -174,7 +182,7 @@ public class Node {
                             parentNode.status = 0;
                             System.out.println("Added node " + parentNode.uid + " as parent");
                         }
-
+                        Thread.sleep(500);
                     }
                     //Send the synchronizer and remove your contendership
                 }
@@ -242,7 +250,7 @@ public class Node {
             }
         } catch (IOException e) {
             e.printStackTrace();
-        }finally {
+        } finally {
             synchronizerSocket.close();
         }
         return 0;

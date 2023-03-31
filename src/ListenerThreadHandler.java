@@ -17,21 +17,24 @@ public class ListenerThreadHandler implements Runnable {
     public void run() {
         try {
             DataInputStream inputStream = new DataInputStream(clientSocket.getInputStream());
+            while (true) {
+                try {
+                    int length = 0;
+                    length = inputStream.readInt();
+                    if (length > 0) {
+                        byte[] line = new byte[length];
+                        inputStream.readFully(line);
+                        String msg = new String(line);
+                        System.out.println("Reviev " + msg);
+                        inputMessages.add(msg);
+                    }
+                } catch (Exception e) {
 
-            try {
-                int length = 0;
-                length = inputStream.readInt();
-                if (length > 0) {
-                    byte[] line = new byte[length];
-                    inputStream.readFully(line);
-                    String msg = new String(line);
-                    inputMessages.add(msg);
                 }
-            } catch (Exception e) {
-
             }
         } catch (IOException e) {
             e.printStackTrace();
         }
     }
 }
+
