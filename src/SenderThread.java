@@ -38,6 +38,7 @@ public class SenderThread implements Runnable {
                         String msg = neighbor.msgQueue.poll();
                         outputStream.writeInt(msg.length());
                         outputStream.writeBytes(msg);
+                        System.out.println("Message has been shipped " + msg);
                     }
                 } catch (Exception e) {
                     e.printStackTrace();

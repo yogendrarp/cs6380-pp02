@@ -93,7 +93,7 @@ public class Node {
          *  but if your UID is smaller than send accept if that is your MWOE
          * */
 
-        while (nodeMetaData.parentUID == -1) {
+        if (nodeMetaData.parentUID == -1) {
             /*
              * Just send TEST message to shortest distance neighbor
              * */
@@ -129,30 +129,29 @@ public class Node {
                 //Since I am sending one message, I will expect one message back.
                 String message = inputMessages.poll();
                 Thread.sleep(1000);
-                System.out.println(String.format("Msg recieved is %s", message));
+                System.out.printf("Msg recieved is %s%n", message);
                 if (message.startsWith(Messages.TEST.value)) {
                     //If my UID is smaller and its my shortest edge, send accept.
                     //Check my edges, if the test is my smallest neighbor and my UID is smaller, send ACCEPT
-                    //Check my edges, if the test is my smallest neight and my UID is bigger, send REJECT
+                    //Check my edges, if the test is my smallest weight and my UID is bigger, send REJECT
                     String[] messageSplit = message.split(",");
                     int messageUID = Integer.parseInt(messageSplit[1]);
-                    System.out.println("Message UID is " + messageUID);
-                    System.out.println("Shortest neigh uid is " + shortestDistNeighbor.uid);
                     NodeMetaData recievedFrom = getNodeFromID(nodeMetaData, messageUID);
+                    String msgToSend = "";
                     if (messageUID == shortestDistNeighbor.uid) {
-                        String msgToSend = "";
-                        System.out.println("Should send some message, "+ nodeMetaData.uid+", messageUID is "+ messageUID);
                         if (nodeMetaData.uid < messageUID) {
                             //send accept
-                            msgToSend = String.format(Messages.ACCEPT.value, nodeMetaData.uid);
+                            msgToSend = String.format(format, Messages.ACCEPT.value, nodeMetaData.uid);
                             acceptSent = true;
                         } else {
                             //send reject
-                            msgToSend = String.format(Messages.REJECT.value, nodeMetaData.uid);
+                            msgToSend = String.format(format, Messages.REJECT.value, nodeMetaData.uid);
                         }
-                        System.out.println("Message to send is "+ msgToSend);
-                        recievedFrom.msgQueue.add(msgToSend);
+                    } else {
+                        msgToSend = String.format(format, Messages.REJECT.value, nodeMetaData.uid);
                     }
+                    System.out.println("Message to send is " + msgToSend + " to node with UID "+ recievedFrom.uid);
+                    recievedFrom.msgQueue.add(msgToSend);
                     Thread.sleep(500);
                 } else if (message.startsWith(Messages.ACCEPT.value)) {
                     //Send ADD node message
@@ -162,32 +161,29 @@ public class Node {
                     int msgUID = Integer.parseInt(messageSplit[1]);
                     NodeMetaData msgRcvdFromNode = getNodeFromID(nodeMetaData, msgUID);
                     msgRcvdFromNode.status = 1;
-                    msgRcvdFromNode.msgQueue.add(String.format(format, Messages.ADD.value));
+                    msgRcvdFromNode.msgQueue.add(String.format(format, Messages.ADD.value, nodeMetaData.uid));
                     synchronizerMessenger(Messages.COMPLETE_CONTENDER.value);
                     Thread.sleep(500);
                 } else if (message.startsWith(Messages.REJECT.value)) {
-                    //I am a child node and now expect an ADD message or nothing at all.
-                    //if I have sent an accept already, I expect a NULL or ADD else inform that you are not a contender and
-                    //go to next phase
-                    if (acceptSent) {
-                        while (inputMessages.isEmpty()) {
-                        }
-                        message = inputMessages.poll();
-                        System.out.println(String.format("Msg recieved is %s", message));
-                        if (message.startsWith(Messages.ADD.value)) {
-                            String[] messageSplit = message.split(",");
-                            int messageUID = Integer.parseInt(messageSplit[1]);
-                            nodeMetaData.parentUID = messageUID;
-                            NodeMetaData parentNode = getNodeFromID(nodeMetaData, nodeMetaData.parentUID);
-                            parentNode.status = 0;
-                            System.out.println("Added node " + parentNode.uid + " as parent");
-                        }
-                        Thread.sleep(500);
-                    }
                     //Send the synchronizer and remove your contendership
+                    System.out.println("Removing my contendership");
+                    Thread.sleep(500);
+                    synchronizerMessenger(Messages.COMPLETE_NONCONTENDER.value);
+                } else if (message.startsWith(Messages.ADD.value)) {
+                    Thread.sleep(500);
+                    String[] messageSplit = message.split(",");
+                    int messageUID = Integer.parseInt(messageSplit[1]);
+                    nodeMetaData.parentUID = messageUID;
+                    NodeMetaData parentNode = getNodeFromID(nodeMetaData, nodeMetaData.parentUID);
+                    parentNode.status = 0;
+                    System.out.println("Added node " + parentNode.uid + " as parent");
+                } else {
+                    System.out.println("Junk message");
                 }
                 //
+                System.out.println("next loop");
             }
+            //Some logic to mark phase 1 complete
         }
 
         // Once parent is set, I just compute MWOE
@@ -230,6 +226,7 @@ public class Node {
 
     static int synchronizerMessenger(String message) throws IOException {
         Socket synchronizerSocket = null;
+        System.out.println("Sending message "+ message+ " to synchronizer");
         try {
             synchronizerSocket = new Socket(SYNCHRONIZER_HOST, SYNCPORT);
             DataOutputStream synchronizerOutputStream = new DataOutputStream(synchronizerSocket.getOutputStream());
@@ -241,6 +238,7 @@ public class Node {
                 byte[] line = new byte[respLength];
                 synchronizerInputStream.readFully(line);
                 String msgResp = new String(line);
+                System.out.println("Message from Synchronizer "+ msgResp);
                 try {
                     int phase = Integer.parseInt(msgResp);
                     return phase;

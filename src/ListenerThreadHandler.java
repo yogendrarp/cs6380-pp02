@@ -25,14 +25,14 @@ public class ListenerThreadHandler implements Runnable {
                         byte[] line = new byte[length];
                         inputStream.readFully(line);
                         String msg = new String(line);
-                        System.out.println("Reviev " + msg);
                         inputMessages.add(msg);
                     }
                 } catch (Exception e) {
 
                 }
+                Thread.sleep(500);
             }
-        } catch (IOException e) {
+        } catch (IOException | InterruptedException e) {
             e.printStackTrace();
         }
     }
