@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.net.InetAddress;
 import java.net.Socket;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Queue;
@@ -98,21 +99,7 @@ public class Node {
              * Just send TEST message to shortest distance neighbor
              * */
             boolean phaseOneCompleted = false;
-            int smallestDistNeighborDistance = Integer.MAX_VALUE; // distam
-            int smallestDistNeighborUID = Integer.MIN_VALUE; // this should not be UID, its okay here
-
-
-            List<Integer> keys = nodeMetaData.neighborUIDsAndWeights.keySet().stream().toList();
-            for (int i = 0; i < keys.size(); i++) {
-                int _tempUID = keys.get(i);
-                int _val = nodeMetaData.neighborUIDsAndWeights.get(keys.get(i));
-                if ((smallestDistNeighborDistance > _val)
-                        ||
-                        (smallestDistNeighborDistance == _val && _tempUID > smallestDistNeighborUID)) {
-                    smallestDistNeighborDistance = _val;
-                    smallestDistNeighborUID = _tempUID;
-                }
-            }
+            int smallestDistNeighborUID = getSmallestDistNodeNeighborUID(nodeMetaData);
 
             //Sends TEST message to shortest neighbor
             NodeMetaData shortestDistNeighbor = getNodeFromID(nodeMetaData, smallestDistNeighborUID);
@@ -130,7 +117,7 @@ public class Node {
                 if (tempPhase > phase) {
                     phase = tempPhase;
                     phaseOneCompleted = true;
-                    break;
+                    continue;
                 }
 
                 if (inputMessages.size() <= 0) {
@@ -183,23 +170,81 @@ public class Node {
                     String[] messageSplit = message.split(",");
                     int messageUID = Integer.parseInt(messageSplit[1]);
                     System.out.println("Adding " + messageUID + " parent node");
-
                     nodeMetaData.parentUID = messageUID;
+                    nodeMetaData.leaderUID = messageUID;
                     NodeMetaData parentNode = getNodeFromID(nodeMetaData, nodeMetaData.parentUID);
                     parentNode.status = 0;
                     System.out.println("Added node " + parentNode.uid + " as parent");
                 } else {
                     System.out.println("Junk message");
                 }
-
             }
             System.out.println("Phase 0 completed");
-            //Some logic to mark phase 1 complete
         }
         System.out.println("Phase is " + phase);
+        boolean mfsTreeConstructed = false;
+        while (!mfsTreeConstructed) {
 
-        // Once parent is set, I just compute MWOE
 
+            //find a way to mark tree construction
+            //if a node recieves NULL from all its neighbors as a response of search,
+            //A node whose parent is set, wont generate search message, it will forward search or will send a test message
+            // Secondly, a node recieves only one search message but multiple test messages, if component UID on test
+            //message is greater than the component it belongs to it sends a CHECK message to its parent which
+            // can be directly the leader or can be a parent in the tree
+            boolean phaseCompleted = false;
+            HashMap<Integer, Integer> responseHashMap = new HashMap<>();
+            nodeMetaData.neighbors.forEach(nw -> responseHashMap.put(nw.uid, -1));
+            //1->expecting a reply, 0->not expecting a reply or all replies recieved, if all are 0. Done with the phase, -1 not yet sent
+            //contender node generate search to neighbors part of tree and TEST to non
+            if (nodeMetaData.parentUID == -1) {
+                boolean areAllNodesUnmarked =
+                        nodeMetaData.neighbors.stream().filter(nm -> nm.status == -1).count()
+                                == nodeMetaData.neighbors.size();
+                if (areAllNodesUnmarked) {
+                    //Send test message only by computing MWOE like above
+                    //non MWOE edges are marked 0, MWOE edge marked 1
+                    int smallestdistNeighborUID = getSmallestDistNodeNeighborUID(nodeMetaData);
+                    NodeMetaData neighborNode = getNodeFromID(nodeMetaData, smallestdistNeighborUID);
+                    neighborNode.msgQueue.add(String.format(format, Messages.TEST, nodeMetaData.uid));
+                    responseHashMap.keySet().forEach(key -> {
+                        responseHashMap.put(key, 0);
+                    });
+                    responseHashMap.put(smallestdistNeighborUID, 1);
+
+                } else {
+                    //Send search across neighbor node and set status to 1
+                    nodeMetaData.neighbors.stream().filter(neigh -> neigh.status == 1).forEach(nmd -> {
+                        nmd.msgQueue.add(String.format(format, Messages.SEARCH.value, nodeMetaData.uid));
+                        responseHashMap.put(nmd.uid, 1);
+                    });
+                }
+
+                nodeMetaData.neighbors.forEach(neighbor -> {
+                    if (neighbor.status == 1) {
+                        //Send search message
+                        neighbor.msgQueue.add(String.format(format, Messages.SEARCH, nodeMetaData.uid));
+                    } else if (neighbor.status == -1) {
+                        //send TEST message
+                        neighbor.msgQueue.add(String.format(format, Messages.TEST, nodeMetaData.uid));
+                    }
+                });
+            }
+            while (!phaseCompleted) {
+                if (inputMessages.isEmpty()) {
+                    Thread.sleep(500);
+                    continue;
+                }
+                String message = inputMessages.poll();
+                if (message.startsWith(Messages.TEST.value)) {
+                    //I could be a child node, check with parent but only if its my smallest neighbor, else send a reject
+                } else if (message.startsWith(Messages.SEARCH.value)) {
+                    //if all my outgoing edges are not marked as non child nodes, only send to shortest neighbor
+                    //else send SEARCH to child and TEST to non marked
+                } else if (message.startsWith(Messages.))
+                //Some logic to mark completion of phase
+            }
+        }
 
     }
 
@@ -234,6 +279,25 @@ public class Node {
         System.out.println("The third argument indicates if the node is initiator or not opts true or false");
         System.out.println();
         System.out.println("If the environment is production, pass 1 args in the format \"java Node prod\"");
+    }
+
+    static int getSmallestDistNodeNeighborUID(NodeMetaData nodeMetaData) {
+        int smallestDistNeighborDistance = Integer.MAX_VALUE; // distam
+        int smallestDistNeighborUID = Integer.MIN_VALUE; // this should not be UID, its okay here
+
+
+        List<Integer> keys = nodeMetaData.neighborUIDsAndWeights.keySet().stream().toList();
+        for (int i = 0; i < keys.size(); i++) {
+            int _tempUID = keys.get(i);
+            int _val = nodeMetaData.neighborUIDsAndWeights.get(keys.get(i));
+            if ((smallestDistNeighborDistance > _val)
+                    ||
+                    (smallestDistNeighborDistance == _val && _tempUID > smallestDistNeighborUID)) {
+                smallestDistNeighborDistance = _val;
+                smallestDistNeighborUID = _tempUID;
+            }
+        }
+        return smallestDistNeighborUID;
     }
 
     static int synchronizerMessenger(String message) throws IOException {
