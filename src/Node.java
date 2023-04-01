@@ -8,6 +8,7 @@ import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Queue;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class Node {
@@ -195,6 +196,8 @@ public class Node {
             boolean phaseCompleted = false;
             HashMap<Integer, Integer> responseHashMap = new HashMap<>();
             nodeMetaData.neighbors.forEach(nw -> responseHashMap.put(nw.uid, -1));
+            int currentknownMinWeightEdge = Integer.MAX_VALUE;
+            String currentKnownMinWeighString = "";
             //1->expecting a reply, 0->not expecting a reply or all replies recieved, if all are 0. Done with the phase, -1 not yet sent
             //contender node generate search to neighbors part of tree and TEST to non
             if (nodeMetaData.parentUID == -1) {
@@ -219,29 +222,105 @@ public class Node {
                         responseHashMap.put(nmd.uid, 1);
                     });
                 }
-
-                nodeMetaData.neighbors.forEach(neighbor -> {
-                    if (neighbor.status == 1) {
-                        //Send search message
-                        neighbor.msgQueue.add(String.format(format, Messages.SEARCH, nodeMetaData.uid));
-                    } else if (neighbor.status == -1) {
-                        //send TEST message
-                        neighbor.msgQueue.add(String.format(format, Messages.TEST, nodeMetaData.uid));
-                    }
-                });
             }
             while (!phaseCompleted) {
                 if (inputMessages.isEmpty()) {
                     Thread.sleep(500);
                     continue;
                 }
+                //how will a child node deal with all responses like the above hashmap
+                // a component leader can recieve a test message, when will this happen, only if the other incoming neighbor distance is greater
                 String message = inputMessages.poll();
                 if (message.startsWith(Messages.TEST.value)) {
-                    //I could be a child node, check with parent but only if its my smallest neighbor, else send a reject
+                    //******This might change entirely
+                    //I could be a child node, check with parent but only if its my smallest neighbor,
+                    // and the component UID of the incoming test is greater than that of my component UID, other wise
+                    // send a reject
+                    int smallestdistNeighborUID = getSmallestDistNodeNeighborUID(nodeMetaData);
+                    String[] msgSplits = message.split(",");
+                    int lastNodeUID = Integer.parseInt(msgSplits[msgSplits.length - 1]);
+                    NodeMetaData nodeWhoSentMsg = getNodeFromID(nodeMetaData, lastNodeUID);
+                    int incomingComponentUID = Integer.parseInt(msgSplits[1]);
+                    if (smallestdistNeighborUID == lastNodeUID) {
+                        //forward to parent to component UID
+                        if (incomingComponentUID > nodeMetaData.leaderUID) {
+                            //forward it to parent, add weight as well, so that MWOE can be computed ASKPARENT
+                            int weightOfIncomingTestReqUID = nodeMetaData.neighborUIDsAndWeights.get(lastNodeUID);
+                            String msgToSend = String.format("%s,%s,%s",
+                                    Messages.ASKPARENT, nodeMetaData.uid, weightOfIncomingTestReqUID);
+                            NodeMetaData parentNode = getNodeFromID(nodeMetaData, nodeMetaData.parentUID);
+                            parentNode.msgQueue.add(msgToSend);
+                        } else {
+                            nodeWhoSentMsg.msgQueue.add(String.format(format, Messages.REJECT, nodeMetaData.uid));
+                        }
+                    } else {
+                        //send reject add my UID
+                        nodeWhoSentMsg.msgQueue.add(String.format(format, Messages.REJECT, nodeMetaData.uid));
+                    }
+
+
                 } else if (message.startsWith(Messages.SEARCH.value)) {
-                    //if all my outgoing edges are not marked as non child nodes, only send to shortest neighbor
-                    //else send SEARCH to child and TEST to non marked
-                } else if (message.startsWith(Messages.))
+                    //If all my edges are not marked, send my parent the minimum of 3
+                    // else forward search to marked nodes
+                    boolean alledgesunmarked = nodeMetaData.neighbors.stream().filter(nm -> nm.status == -1).count() == nodeMetaData.neighbors.size();
+                    if (alledgesunmarked) {
+                        int shortestdistNeighborUID = getSmallestDistNodeNeighborUID(nodeMetaData);
+                        int weightOfIt = nodeMetaData.neighborUIDsAndWeights.get(shortestdistNeighborUID);
+                        String msgToSendParent = String.format("%s,%s,%s", Messages.MIN_EDGE.value, shortestdistNeighborUID, weightOfIt);
+                        NodeMetaData parentNode = getNodeFromID(nodeMetaData, nodeMetaData.parentUID);
+                        parentNode.msgQueue.add(msgToSendParent);
+                    } else {
+                        nodeMetaData.neighbors.stream().filter(nm -> nm.status == 1).forEach(nm -> {
+                            nm.msgQueue.add(message);
+                        });
+                    }
+                } else if (message.startsWith(Messages.MIN_EDGE.value)) {
+                    String[] msgSplits = message.split(",");
+                    int minWeight = Integer.parseInt(msgSplits[msgSplits.length - 1]);
+                    int responseFrom = Integer.parseInt(msgSplits[msgSplits.length - 2]);
+                    if (minWeight < currentknownMinWeightEdge) {
+                        currentknownMinWeightEdge = minWeight;
+                        currentKnownMinWeighString = message;
+                    }
+                    responseHashMap.put(responseFrom, 0);
+                    AtomicBoolean allresponse = new AtomicBoolean(true);
+                    responseHashMap.keySet().forEach(key -> {
+                        if (responseHashMap.get(key) == 1) {
+                            allresponse.set(false);
+                        }
+                    });
+                    //All nodes have responded, but check if there was one or more immediate neighbor
+                    if(allresponse.get()){
+                        //checkf if an direct neighbor 1 or more is present and chec their weights
+                    }
+
+                } else if (message.startsWith(Messages.ASKPARENT.value)) {
+                    //if my parent is -1, I must take decision,
+                    // mark reply not expected in hashmap
+                    //mark this as an proable edge
+                    //once all done, see if some is -1 in hashmap, if that dist is bigger, ignore that edge for now
+                    //take the smallest edge and add it
+
+                    //if iam not a parent
+                    // remove weight from last msg part, add my hop UID, add the weight back
+                } else if (message.startsWith(Messages.REJECT.value)) {
+                    //got reject, update hashmap
+                    //ASKPARENT might also send REJECT
+                    //There is only one REJECTION at a node level, one rejection at a parent level, if simple reject
+                    // diffuse it at node
+                    // complex rejection would propogate?
+                    String[] messageSplits = message.split(",");
+                    int msgUid = Integer.parseInt(messageSplits[1]);
+                    responseHashMap.put(msgUid, 0);
+                    NodeMetaData parentnode = getNodeFromID(nodeMetaData, nodeMetaData.parentUID);
+                    parentnode.msgQueue.add(String.format(Messages.SEARCH_REJECT.value));
+                } else if (message.startsWith(Messages.SEARCH_REJECT.value)) {
+                    //Since this a parent or an intermediate node
+                    //Should I treat componnet ledader and internode diff?
+                    // if i had a node to which I didnt send test, but I am not waiting for any msg send test to that node
+
+                    if ()
+                }
                 //Some logic to mark completion of phase
             }
         }
