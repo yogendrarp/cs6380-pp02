@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Queue;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Collectors;
 
 public class Node {
     static String SYNCHRONIZER_HOST = "localhost"; //Change to dc01
@@ -233,31 +234,12 @@ public class Node {
                 String message = inputMessages.poll();
                 if (message.startsWith(Messages.TEST.value)) {
                     //******This might change entirely
-                    //I could be a child node, check with parent but only if its my smallest neighbor,
-                    // and the component UID of the incoming test is greater than that of my component UID, other wise
-                    // send a reject
-                    int smallestdistNeighborUID = getSmallestDistNodeNeighborUID(nodeMetaData);
-                    String[] msgSplits = message.split(",");
-                    int lastNodeUID = Integer.parseInt(msgSplits[msgSplits.length - 1]);
-                    NodeMetaData nodeWhoSentMsg = getNodeFromID(nodeMetaData, lastNodeUID);
-                    int incomingComponentUID = Integer.parseInt(msgSplits[1]);
-                    if (smallestdistNeighborUID == lastNodeUID) {
-                        //forward to parent to component UID
-                        if (incomingComponentUID > nodeMetaData.leaderUID) {
-                            //forward it to parent, add weight as well, so that MWOE can be computed ASKPARENT
-                            int weightOfIncomingTestReqUID = nodeMetaData.neighborUIDsAndWeights.get(lastNodeUID);
-                            String msgToSend = String.format("%s,%s,%s",
-                                    Messages.ASKPARENT, nodeMetaData.uid, weightOfIncomingTestReqUID);
-                            NodeMetaData parentNode = getNodeFromID(nodeMetaData, nodeMetaData.parentUID);
-                            parentNode.msgQueue.add(msgToSend);
-                        } else {
-                            nodeWhoSentMsg.msgQueue.add(String.format(format, Messages.REJECT, nodeMetaData.uid));
-                        }
-                    } else {
-                        //send reject add my UID
-                        nodeWhoSentMsg.msgQueue.add(String.format(format, Messages.REJECT, nodeMetaData.uid));
-                    }
-
+                    ////TEST,COMPONENTUID, WEIGHT, path....
+                    //Change everything down
+                    // from test message, last is my UID, remove it veryify, if that UID is my uid and i am parent
+                    // accept the milana
+                    // fatal crash if its not my uid
+                    // peek last uid, send to that node
 
                 } else if (message.startsWith(Messages.SEARCH.value)) {
                     //If all my edges are not marked, send my parent the minimum of 3
@@ -266,7 +248,9 @@ public class Node {
                     if (alledgesunmarked) {
                         int shortestdistNeighborUID = getSmallestDistNodeNeighborUID(nodeMetaData);
                         int weightOfIt = nodeMetaData.neighborUIDsAndWeights.get(shortestdistNeighborUID);
-                        String msgToSendParent = String.format("%s,%s,%s", Messages.MIN_EDGE.value, shortestdistNeighborUID, weightOfIt);
+                        //MIN_EDGE,WEIGHT,SHORTNEIGHBOR,MYUID, PARENT WILL APPEND ITS
+                        String msgToSendParent = String.format("%s,%s,%s,%s", Messages.MIN_EDGE.value, weightOfIt,
+                                shortestdistNeighborUID, nodeMetaData.uid);
                         NodeMetaData parentNode = getNodeFromID(nodeMetaData, nodeMetaData.parentUID);
                         parentNode.msgQueue.add(msgToSendParent);
                     } else {
@@ -275,6 +259,7 @@ public class Node {
                         });
                     }
                 } else if (message.startsWith(Messages.MIN_EDGE.value)) {
+                    //What if I am the parent?
                     String[] msgSplits = message.split(",");
                     int minWeight = Integer.parseInt(msgSplits[msgSplits.length - 1]);
                     int responseFrom = Integer.parseInt(msgSplits[msgSplits.length - 2]);
@@ -292,19 +277,32 @@ public class Node {
                     //All nodes have responded, but check if there was one or more immediate neighbor
                     if (allresponse.get()) {
                         //checkf if an direct neighbor 1 or more is present and chec their weights
-                        responseHashMap.keySet().stream().filter(key -> responseHashMap.get(key) == -1).forEach(key -> {
+                        List<Integer> immediate = responseHashMap.keySet().stream().filter(key -> responseHashMap.get(key) == -1).collect(Collectors.toList());
+                        for (int i = 0; i < immediate.size(); i++) {
+                            int key = immediate.get(i);
                             if (currentknownMinWeightEdge > nodeMetaData.neighborUIDsAndWeights.get(key)) {
                                 currentknownMinWeightEdge = nodeMetaData.neighborUIDsAndWeights.get(key);
                                 currentKnownMinWeighString = String.format(format, Messages.MIN_EDGE, key);
                             }
-                        });
-
-                        //Send min edge to parent but add my info last but wight
-                        int lastIndex = currentKnownMinWeighString.lastIndexOf(",");
-                        currentKnownMinWeighString = currentKnownMinWeighString.substring(0, lastIndex) + "," + nodeMetaData.uid + ","
-                                + currentKnownMinWeighString.substring(lastIndex + 1);
-                        NodeMetaData parent = getNodeFromID(nodeMetaData, nodeMetaData.parentUID);
-                        parent.msgQueue.add(currentKnownMinWeighString);
+                        }
+                        if (nodeMetaData.leaderUID == nodeMetaData.uid) {
+                            //Take decision here
+                            //Each node sends 1 TEST message, but might recieve multiple test messages.
+                            //Min edge message has a trace of the path
+                            //MIN_EDGE,WEIGHT,SHORTEDGE,ITSPARENT,ITSPARENTSPARENT
+                            //TEST,COMPONENTUID, WEIGHT, path....
+                            String testMessage = Messages.TEST.value + "," + currentKnownMinWeighString.substring(1 + currentKnownMinWeighString.indexOf(","));
+                            System.out.println("Test message generated is " + testMessage);
+                            int nextNodeId = Integer.parseInt(testMessage.substring(1 + testMessage.lastIndexOf(",")));
+                            System.out.println("Next node is " + nextNodeId);
+                            NodeMetaData nextNode = getNodeFromID(nodeMetaData, nextNodeId);
+                            nextNode.msgQueue.add(testMessage);
+                        } else {
+                            //Send min edge to parent but add my info last but wight
+                            currentKnownMinWeighString = currentKnownMinWeighString + "," + nodeMetaData.uid;
+                            NodeMetaData parent = getNodeFromID(nodeMetaData, nodeMetaData.parentUID);
+                            parent.msgQueue.add(currentKnownMinWeighString);
+                        }
                     }
                 } else if (message.startsWith(Messages.ASKPARENT.value)) {
                     //if my parent is -1, I must take decision,
