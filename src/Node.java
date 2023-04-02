@@ -290,10 +290,22 @@ public class Node {
                         }
                     });
                     //All nodes have responded, but check if there was one or more immediate neighbor
-                    if(allresponse.get()){
+                    if (allresponse.get()) {
                         //checkf if an direct neighbor 1 or more is present and chec their weights
-                    }
+                        responseHashMap.keySet().stream().filter(key -> responseHashMap.get(key) == -1).forEach(key -> {
+                            if (currentknownMinWeightEdge > nodeMetaData.neighborUIDsAndWeights.get(key)) {
+                                currentknownMinWeightEdge = nodeMetaData.neighborUIDsAndWeights.get(key);
+                                currentKnownMinWeighString = String.format(format, Messages.MIN_EDGE, key);
+                            }
+                        });
 
+                        //Send min edge to parent but add my info last but wight
+                        int lastIndex = currentKnownMinWeighString.lastIndexOf(",");
+                        currentKnownMinWeighString = currentKnownMinWeighString.substring(0, lastIndex) + "," + nodeMetaData.uid + ","
+                                + currentKnownMinWeighString.substring(lastIndex + 1);
+                        NodeMetaData parent = getNodeFromID(nodeMetaData, nodeMetaData.parentUID);
+                        parent.msgQueue.add(currentKnownMinWeighString);
+                    }
                 } else if (message.startsWith(Messages.ASKPARENT.value)) {
                     //if my parent is -1, I must take decision,
                     // mark reply not expected in hashmap
@@ -318,7 +330,6 @@ public class Node {
                     //Since this a parent or an intermediate node
                     //Should I treat componnet ledader and internode diff?
                     // if i had a node to which I didnt send test, but I am not waiting for any msg send test to that node
-
                     if ()
                 }
                 //Some logic to mark completion of phase
