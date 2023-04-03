@@ -242,7 +242,7 @@ public class Node {
                 int myknownminedge = Integer.MAX_VALUE;
                 if (message.startsWith(Messages.TEST.value)) {
                     //******This might change entirely
-                    ////TEST,COMPONENTUID, WEIGHT, path....
+                    ////TEST, WEIGHT,COMPONENTUID path....
                     //Change everything down
                     // from test message, last is my UID, remove it veryify, if that UID is my uid and i am parent
                     // accept the milana
@@ -347,11 +347,20 @@ public class Node {
                 } else if (message.startsWith(Messages.REJECT.value)) {
                     // test message was rejected
                     //remove contendership
-                    synchronizerMessenger(Messages.COMPLETE_NONCONTENDER.value);
-                } else if("ACCEPT"=="ACCEPT") {
+                    //REJECT->REJECTERCOMPONENT->ITSFIRSTCHILD->ITSSECONDCHILD->.....LASTCHILDBEFORE->REJECTEDCOMPONENT
+                    if (nodeMetaData.uid == nodeMetaData.leaderUID) {
+                        synchronizerMessenger(Messages.COMPLETE_NONCONTENDER.value);
+                    } else {
+                        NodeMetaData parentNdoe = getNodeFromID(nodeMetaData, nodeMetaData.uid);
+                        parentNdoe.msgQueue.add(message);
+                    }
+                } else if ("ACCEPT" == "ACCEPT") {
                     //PIGGYBACK to update leader UID and parenrts
+                    //SEND ACK_MERGE across all nodes.
+                    // OTHER NODE, the one who sent REJECT message, on receiving a ACK_MERGE message tells its still a contentder
+                } else if (message.startsWith(Messages.ACK_MERGE.value)) {
+                    synchronizerMessenger(Messages.COMPLETE_CONTENDER.value);
                 }
-                //Some logic to mark completion of phase
             }
         }
 
