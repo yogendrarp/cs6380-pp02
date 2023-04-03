@@ -43,7 +43,7 @@ public class Node {
         }
 
         ConfigurationReader configurationReader = new ConfigurationReader();
-        String configFileName = "C:\\Users\\yogen\\Documents\\D\\Code\\cs6380-pp02\\src\\configuration.txt";
+        String configFileName = "configuration.txt";
         NetworkInformation networkInformation;
 
         System.out.println(hostName + "," + configFileName + "," + env);
@@ -100,25 +100,26 @@ public class Node {
             /*
              * Just send TEST message to shortest distance neighbor
              * */
-            boolean phaseOneCompleted = false;
+            boolean phaseZeroCompleted = false;
             int smallestDistNeighborUID = getSmallestDistNodeNeighborUID(nodeMetaData);
 
             //Sends TEST message to shortest neighbor
             NodeMetaData shortestDistNeighbor = getNodeFromID(nodeMetaData, smallestDistNeighborUID);
             if (shortestDistNeighbor == null) {
-                System.out.println("Fatal Error, node doesnt match neighbor UID");
+                System.out.println("Fatal Error, node doesn't match neighbor UID");
                 System.exit(-1);
             }
             shortestDistNeighbor.msgQueue.add(String.format(format, Messages.TEST, nodeMetaData.uid));
             System.out.println(String.format("Shortest neighbor node is with UID: %d", smallestDistNeighborUID));
 
             //Phase 0
-            while (!phaseOneCompleted) {
+            while (!phaseZeroCompleted) {
                 Thread.sleep(500);
                 int tempPhase = synchronizerMessenger(Messages.ENQUIRY.value);
+
                 if (tempPhase > phase) {
                     phase = tempPhase;
-                    phaseOneCompleted = true;
+                    phaseZeroCompleted = true;
                     continue;
                 }
 
@@ -165,7 +166,6 @@ public class Node {
                 } else if (message.startsWith(Messages.REJECT.value)) {
                     //Send the synchronizer and remove your contendership
                     System.out.println("Removing my contendership");
-
                     synchronizerMessenger(Messages.COMPLETE_NONCONTENDER.value);
                 } else if (message.startsWith(Messages.ADD.value)) {
 
@@ -225,6 +225,13 @@ public class Node {
                 }
             }
             while (!phaseCompleted) {
+                Thread.sleep(500);
+                int tempPhase = synchronizerMessenger(Messages.ENQUIRY.value);
+                if (tempPhase > phase) {
+                    phase = tempPhase;
+                    break;
+                }
+
                 if (inputMessages.isEmpty()) {
                     Thread.sleep(500);
                     continue;
@@ -232,6 +239,7 @@ public class Node {
                 //how will a child node deal with all responses like the above hashmap
                 // a component leader can recieve a test message, when will this happen, only if the other incoming neighbor distance is greater
                 String message = inputMessages.poll();
+                int myknownminedge = Integer.MAX_VALUE;
                 if (message.startsWith(Messages.TEST.value)) {
                     //******This might change entirely
                     ////TEST,COMPONENTUID, WEIGHT, path....
@@ -241,6 +249,25 @@ public class Node {
                     // fatal crash if its not my uid
                     // peek last uid, send to that node
 
+                    String[] msgSplist = message.split(",");
+                    if (nodeMetaData.leaderUID == nodeMetaData.uid) {
+                        //Testmessage at intermediate node  in a component:
+                        // TEST,SENDERLEADER,SENDERLEADERSCHILD1, SENDERLEDERSCHILD2....,LASTCHILD,FIRSTCHILDOFOTHERCOMPONENT
+                        //each intermediate node search its UID position,if present send to next, if not u are in other component, so add your parent and send to it
+
+                        //Test message at intermediate node in other component
+                        // TEST,SENDERLEADER,SENDERLEADERSCHILD1, SENDERLEDERSCHILD2....,LASTCHILD,FIRSTCHILDOFOTHERCOMPONENT,PARENT1, PARENT2
+                        //TEST message once it reacehe the leader of othe component
+                        //TEST,SENDERLEADER,SENDERLEADERSCHILD1, SENDERLEDERSCHILD2....,LASTCHILD,FIRSTCHILDOFOTHERCOMPONENT,PARENT1, PARENT2...LEADEROFOTHERCOMPONNET
+                        //I am the parent, if I am aware that this is the min edge I have seen, I accept the milana
+                        // if My UID is smaller, else I send a reject because the same edge will have test message from
+                        // me and I want that edge to add me
+                        //if accept then send to each node to update its component uid to be that of leader
+                        // each node on the path changes its parent direction as well
+                        // and also Send a spl message to connecting edge to update one of its edge as child or parent
+
+
+                    }
                 } else if (message.startsWith(Messages.SEARCH.value)) {
                     //If all my edges are not marked, send my parent the minimum of 3
                     // else forward search to marked nodes
@@ -248,9 +275,9 @@ public class Node {
                     if (alledgesunmarked) {
                         int shortestdistNeighborUID = getSmallestDistNodeNeighborUID(nodeMetaData);
                         int weightOfIt = nodeMetaData.neighborUIDsAndWeights.get(shortestdistNeighborUID);
-                        //MIN_EDGE,WEIGHT,SHORTNEIGHBOR,MYUID, PARENT WILL APPEND ITS
+                        //MIN_EDGE,WEIGHT,MYUID,UIDOFOTHERCOMPONENT, PARENT WILL APPEND ITS
                         String msgToSendParent = String.format("%s,%s,%s,%s", Messages.MIN_EDGE.value, weightOfIt,
-                                shortestdistNeighborUID, nodeMetaData.uid);
+                                nodeMetaData.uid, shortestdistNeighborUID);
                         NodeMetaData parentNode = getNodeFromID(nodeMetaData, nodeMetaData.parentUID);
                         parentNode.msgQueue.add(msgToSendParent);
                     } else {
@@ -276,13 +303,15 @@ public class Node {
                     });
                     //All nodes have responded, but check if there was one or more immediate neighbor
                     if (allresponse.get()) {
-                        //checkf if an direct neighbor 1 or more is present and chec their weights
+                        //check if an direct neighbor 1 or more is present and check their weights
                         List<Integer> immediate = responseHashMap.keySet().stream().filter(key -> responseHashMap.get(key) == -1).collect(Collectors.toList());
                         for (int i = 0; i < immediate.size(); i++) {
                             int key = immediate.get(i);
                             if (currentknownMinWeightEdge > nodeMetaData.neighborUIDsAndWeights.get(key)) {
                                 currentknownMinWeightEdge = nodeMetaData.neighborUIDsAndWeights.get(key);
-                                currentKnownMinWeighString = String.format(format, Messages.MIN_EDGE, key);
+                                //here I might have to recreate the entire message, if so
+                                //MIN_EDGE, WEIGHT,MYUID, CONNECTINGUID
+                                currentKnownMinWeighString = Messages.MIN_EDGE.value + "," + currentknownMinWeightEdge + nodeMetaData.uid + key;     //String.format(format, Messages.MIN_EDGE, key);
                             }
                         }
                         if (nodeMetaData.leaderUID == nodeMetaData.uid) {
@@ -297,38 +326,30 @@ public class Node {
                             System.out.println("Next node is " + nextNodeId);
                             NodeMetaData nextNode = getNodeFromID(nodeMetaData, nextNodeId);
                             nextNode.msgQueue.add(testMessage);
+                            myknownminedge = currentknownMinWeightEdge;
                         } else {
                             //Send min edge to parent but add my info last but wight
-                            currentKnownMinWeighString = currentKnownMinWeighString + "," + nodeMetaData.uid;
+                            String[] splitsOFCurrentMINED = currentKnownMinWeighString.split(",");
+                            StringBuilder builder = new StringBuilder();
+                            for (int i = 0; i < splitsOFCurrentMINED.length; i++) {
+                                if (i == 2) {
+                                    builder.append(nodeMetaData.uid + ","); //be aware of this ','
+                                } else if (i == splitsOFCurrentMINED.length - 1) {
+                                    builder.append(splitsOFCurrentMINED[i]);
+                                } else {
+                                    builder.append(splitsOFCurrentMINED[i] + ",");
+                                }
+                            }
                             NodeMetaData parent = getNodeFromID(nodeMetaData, nodeMetaData.parentUID);
                             parent.msgQueue.add(currentKnownMinWeighString);
                         }
                     }
-                } else if (message.startsWith(Messages.ASKPARENT.value)) {
-                    //if my parent is -1, I must take decision,
-                    // mark reply not expected in hashmap
-                    //mark this as an proable edge
-                    //once all done, see if some is -1 in hashmap, if that dist is bigger, ignore that edge for now
-                    //take the smallest edge and add it
-
-                    //if iam not a parent
-                    // remove weight from last msg part, add my hop UID, add the weight back
                 } else if (message.startsWith(Messages.REJECT.value)) {
-                    //got reject, update hashmap
-                    //ASKPARENT might also send REJECT
-                    //There is only one REJECTION at a node level, one rejection at a parent level, if simple reject
-                    // diffuse it at node
-                    // complex rejection would propogate?
-                    String[] messageSplits = message.split(",");
-                    int msgUid = Integer.parseInt(messageSplits[1]);
-                    responseHashMap.put(msgUid, 0);
-                    NodeMetaData parentnode = getNodeFromID(nodeMetaData, nodeMetaData.parentUID);
-                    parentnode.msgQueue.add(String.format(Messages.SEARCH_REJECT.value));
-                } else if (message.startsWith(Messages.SEARCH_REJECT.value)) {
-                    //Since this a parent or an intermediate node
-                    //Should I treat componnet ledader and internode diff?
-                    // if i had a node to which I didnt send test, but I am not waiting for any msg send test to that node
-                    if ()
+                    // test message was rejected
+                    //remove contendership
+                    synchronizerMessenger(Messages.COMPLETE_NONCONTENDER.value);
+                } else if("ACCEPT"=="ACCEPT") {
+                    //PIGGYBACK to update leader UID and parenrts
                 }
                 //Some logic to mark completion of phase
             }
