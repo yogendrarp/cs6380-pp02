@@ -265,7 +265,7 @@ public class Node {
                         //if accept then send to each node to update its component uid to be that of leader
                         // each node on the path changes its parent direction as well
                         // and also Send a spl message to connecting edge to update one of its edge as child or parent
-
+                    } else {
 
                     }
                 } else if (message.startsWith(Messages.SEARCH.value)) {
@@ -287,9 +287,10 @@ public class Node {
                     }
                 } else if (message.startsWith(Messages.MIN_EDGE.value)) {
                     //What if I am the parent?
+                    //Must change this logic
                     String[] msgSplits = message.split(",");
-                    int minWeight = Integer.parseInt(msgSplits[msgSplits.length - 1]);
-                    int responseFrom = Integer.parseInt(msgSplits[msgSplits.length - 2]);
+                    int minWeight = Integer.parseInt(msgSplits[1]);
+                    int responseFrom = Integer.parseInt(msgSplits[2]);
                     if (minWeight < currentknownMinWeightEdge) {
                         currentknownMinWeightEdge = minWeight;
                         currentKnownMinWeighString = message;
