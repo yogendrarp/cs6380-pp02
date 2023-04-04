@@ -15,6 +15,7 @@ public class NodeMetaData {
     int parentUID;
     int perspectiveWeight;
     Queue<String> msgQueue;
+    int level;//k
     int status;//-1,0,1 -1 is unknown, 0 is parent, 1 is child
 
     AtomicBoolean isConnected = new AtomicBoolean(false);

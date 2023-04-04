@@ -79,6 +79,7 @@ public class ConfigurationReader {
         currNodeMetaData.leaderUID = currNodeMetaData.uid;
         currNodeMetaData.treeNodes = new ArrayList<>();
         currNodeMetaData.parentUID = -1;
+        currNodeMetaData.level = 1;
         ArrayList<NeighbourWeights> neighborWeights = neighbourWeightsHashMap.get(currNodeMetaData.uid);
         neighborWeights.forEach(nw -> {
             currNodeMetaData.neighborUIDsAndWeights.put(nw.node, nw.value);

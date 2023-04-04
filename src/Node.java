@@ -5,6 +5,7 @@ import java.net.InetAddress;
 import java.net.Socket;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Queue;
@@ -160,6 +161,7 @@ public class Node {
                     int msgUID = Integer.parseInt(messageSplit[1]);
                     NodeMetaData msgRcvdFromNode = getNodeFromID(nodeMetaData, msgUID);
                     msgRcvdFromNode.status = 1;
+                    nodeMetaData.level += 1;
                     msgRcvdFromNode.msgQueue.add(String.format(format, Messages.ADD.value, nodeMetaData.uid));
                     synchronizerMessenger(Messages.COMPLETE_CONTENDER.value);
 
@@ -174,6 +176,7 @@ public class Node {
                     System.out.println("Adding " + messageUID + " parent node");
                     nodeMetaData.parentUID = messageUID;
                     nodeMetaData.leaderUID = messageUID;
+                    nodeMetaData.level += 1;
                     NodeMetaData parentNode = getNodeFromID(nodeMetaData, nodeMetaData.parentUID);
                     parentNode.status = 0;
                     System.out.println("Added node " + parentNode.uid + " as parent");
@@ -183,6 +186,8 @@ public class Node {
             }
             System.out.println("Phase 0 completed");
         }
+
+
         System.out.println("Phase is " + phase);
         boolean mfsTreeConstructed = false;
         while (!mfsTreeConstructed) {
@@ -248,7 +253,6 @@ public class Node {
                     // accept the milana
                     // fatal crash if its not my uid
                     // peek last uid, send to that node
-
                     String[] msgSplist = message.split(",");
                     if (nodeMetaData.leaderUID == nodeMetaData.uid) {
                         //Testmessage at intermediate node  in a component:
@@ -265,8 +269,28 @@ public class Node {
                         //if accept then send to each node to update its component uid to be that of leader
                         // each node on the path changes its parent direction as well
                         // and also Send a spl message to connecting edge to update one of its edge as child or parent
-                    } else {
+                        //Test message reached parent
 
+
+
+                    } else {
+                        //What if I am the last node, send to my parent append its UID
+                        int k = -1;
+                        for (int i = 0; i < msgSplist.length; i++) {
+                            if (msgSplist[i].equals(nodeMetaData.uid + "")) {
+                                k = i + 1;
+                            }
+                        }
+                        if (k == msgSplist.length) {
+                            int p_id = nodeMetaData.parentUID;
+                            message = message + "," + p_id;
+                            NodeMetaData parenNode = getNodeFromID(nodeMetaData, p_id);
+                            parenNode.msgQueue.add(message);
+                            //Append my parent and send to it
+                        } else {
+                            NodeMetaData childNode = getNodeFromID(nodeMetaData, Integer.parseInt(msgSplist[k]));
+                            childNode.msgQueue.add(message);
+                        }
                     }
                 } else if (message.startsWith(Messages.SEARCH.value)) {
                     //If all my edges are not marked, send my parent the minimum of 3
@@ -287,7 +311,7 @@ public class Node {
                     }
                 } else if (message.startsWith(Messages.MIN_EDGE.value)) {
                     //What if I am the parent?
-                    //Must change this logic
+                    //Must change this logic?
                     String[] msgSplits = message.split(",");
                     int minWeight = Integer.parseInt(msgSplits[1]);
                     int responseFrom = Integer.parseInt(msgSplits[2]);
@@ -311,8 +335,8 @@ public class Node {
                             if (currentknownMinWeightEdge > nodeMetaData.neighborUIDsAndWeights.get(key)) {
                                 currentknownMinWeightEdge = nodeMetaData.neighborUIDsAndWeights.get(key);
                                 //here I might have to recreate the entire message, if so
-                                //MIN_EDGE, WEIGHT,MYUID, CONNECTINGUID
-                                currentKnownMinWeighString = Messages.MIN_EDGE.value + "," + currentknownMinWeightEdge + nodeMetaData.uid + key;     //String.format(format, Messages.MIN_EDGE, key);
+                                //MIN_EDGE, WEIGHT,MYUID, CONNECTINGUID .. not adding my UID here, will add it at bottom
+                                currentKnownMinWeighString = Messages.MIN_EDGE.value + "," + currentknownMinWeightEdge + key;     //String.format(format, Messages.MIN_EDGE, key);
                             }
                         }
                         if (nodeMetaData.leaderUID == nodeMetaData.uid) {
@@ -321,10 +345,12 @@ public class Node {
                             //Min edge message has a trace of the path
                             //MIN_EDGE,WEIGHT,SHORTEDGE,ITSPARENT,ITSPARENTSPARENT
                             //TEST,COMPONENTUID, WEIGHT, path....
-                            String testMessage = Messages.TEST.value + "," + currentKnownMinWeighString.substring(1 + currentKnownMinWeighString.indexOf(","));
+                            String testMessage = Messages.TEST.value + "," + nodeMetaData.uid +
+                                    "," + currentKnownMinWeighString.substring(1 + currentKnownMinWeighString.indexOf(","));
+
+
                             System.out.println("Test message generated is " + testMessage);
-                            int nextNodeId = Integer.parseInt(testMessage.substring(1 + testMessage.lastIndexOf(",")));
-                            System.out.println("Next node is " + nextNodeId);
+                            int nextNodeId = Integer.parseInt(testMessage.split(",")[3]);
                             NodeMetaData nextNode = getNodeFromID(nodeMetaData, nextNodeId);
                             nextNode.msgQueue.add(testMessage);
                             myknownminedge = currentknownMinWeightEdge;
@@ -338,11 +364,13 @@ public class Node {
                                 } else if (i == splitsOFCurrentMINED.length - 1) {
                                     builder.append(splitsOFCurrentMINED[i]);
                                 } else {
-                                    builder.append(splitsOFCurrentMINED[i] + ",");
+                                    builder.append(splitsOFCurrentMINED[i]).append(",");
                                 }
                             }
+                            String updatedMinEdgemsg = builder.toString();
+                            System.out.println("Update MIN eedge is " + updatedMinEdgemsg);
                             NodeMetaData parent = getNodeFromID(nodeMetaData, nodeMetaData.parentUID);
-                            parent.msgQueue.add(currentKnownMinWeighString);
+                            parent.msgQueue.add(updatedMinEdgemsg);
                         }
                     }
                 } else if (message.startsWith(Messages.REJECT.value)) {
@@ -360,11 +388,14 @@ public class Node {
                     //SEND ACK_MERGE across all nodes.
                     // OTHER NODE, the one who sent REJECT message, on receiving a ACK_MERGE message tells its still a contentder
                 } else if (message.startsWith(Messages.ACK_MERGE.value)) {
+                    //Child node
                     synchronizerMessenger(Messages.COMPLETE_CONTENDER.value);
                 }
             }
         }
-
+        if (nodeMetaData.leaderUID == nodeMetaData.uid) {
+            mstPrint(nodeMetaData);
+        }
     }
 
     /***
@@ -417,6 +448,23 @@ public class Node {
             }
         }
         return smallestDistNeighborUID;
+    }
+
+    static void mstPrint(NodeMetaData nodeMetaData) {
+        Queue<NodeMetaData> queue = new LinkedList<>();
+        queue.add(nodeMetaData);
+        HashSet<Integer> hashSet = new HashSet<>();
+        hashSet.add(nodeMetaData.uid);
+        while (!queue.isEmpty()) {
+            NodeMetaData nmd = queue.poll();
+            System.out.println(nmd.uid);
+            nmd.neighbors.forEach(nodeMetaData1 -> {
+                if (!hashSet.contains(nodeMetaData1.uid)) {
+                    hashSet.add(nodeMetaData1.uid);
+                    queue.add(nodeMetaData1);
+                }
+            });
+        }
     }
 
     static int synchronizerMessenger(String message) throws IOException {
