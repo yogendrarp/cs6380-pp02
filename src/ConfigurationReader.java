@@ -97,6 +97,7 @@ public class ConfigurationReader {
             if (neigh != null) {
                 neigh.perspectiveWeight = nw.value;
             }
+            neigh.status = -1;
             currNodeMetaData.neighbors.add(neigh);
         });
     }
