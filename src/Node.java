@@ -78,6 +78,9 @@ public class Node {
             new Thread(senderThread).start();
         });
 
+
+
+
         boolean allNodesNotConnected = true;
         while (allNodesNotConnected) {
             boolean allCon = true;
@@ -91,6 +94,8 @@ public class Node {
         }
         System.out.println("All nodes are connected, waiting to stabilize");
         Thread.sleep(10000);
+
+
 
         /*
          *  if you recieve search message and the component id is different than urs, and if you recieve search message
@@ -118,6 +123,8 @@ public class Node {
             int counter = 0;
             boolean synced = false, rejected = false;
 
+
+
             while (!phaseZeroCompleted) {
                 Thread.sleep(getRand() * 1000L);
                 int tempPhase = synchronizerMessenger(Messages.ENQUIRY.value);
@@ -139,6 +146,8 @@ public class Node {
                     Thread.sleep(getRand() * 100L);
                     continue;
                 }
+
+
 
 
 
@@ -209,6 +218,8 @@ public class Node {
             System.out.println("Phase 0 completed");
         }
 
+
+
         Thread.sleep(getRand()*1000L);
         System.out.println("*********************************************************************************");
         Thread.sleep(getRand()*800L);
@@ -261,6 +272,8 @@ public class Node {
                     });
                 }
             }
+
+
             while (!phaseCompleted) {
                 Thread.sleep(500);
                 int tempPhase = synchronizerMessenger(Messages.ENQUIRY.value);
@@ -468,10 +481,14 @@ public class Node {
         }
     }
 
+
+
     private static boolean checkMsfTreeConstructed(NetworkInformation networkInformation, int phase) {
         double countOfPhases = Math.log(networkInformation.countNodes) / Math.log(2);
         return (int) countOfPhases == phase;
     }
+
+
 
     private static NodePointers getmyNewParentChildNodes(String[] acceptMsgSplit, String id) {
 
