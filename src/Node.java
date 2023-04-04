@@ -270,7 +270,27 @@ public class Node {
                         // each node on the path changes its parent direction as well
                         // and also Send a spl message to connecting edge to update one of its edge as child or parent
                         //Test message reached parent
-
+                        int smallestWeightEdge = Integer.parseInt(msgSplist[2]);
+                        int otherComponentUID = Integer.parseInt(msgSplist[1]);
+                        if (smallestWeightEdge <= myknownminedge && nodeMetaData.uid < otherComponentUID) {
+                            //if my UID is smaller, I accept
+                            String acceptMsg = rejectionOrAcceptMsgBuilder(Messages.ACCEPT.value, msgSplist);
+                            acceptMsg = acceptMsg + "," + nodeMetaData.uid;
+                            //Change my child as my parent, update my leader UID, remove my contendership done in reject
+                            int lastNode = Integer.parseInt(acceptMsg.substring(1 + acceptMsg.lastIndexOf(",")));
+                            nodeMetaData.level++;
+                            nodeMetaData.leaderUID = otherComponentUID;
+                            nodeMetaData.parentUID = lastNode;
+                            NodeMetaData parentNode = getNodeFromID(nodeMetaData, lastNode);
+                            parentNode.status = 0;
+                            parentNode.msgQueue.add(acceptMsg);
+                        } else {
+                            //reject
+                            String rejectMsg = rejectionOrAcceptMsgBuilder(Messages.REJECT.value, msgSplist);
+                            int lastNode = Integer.parseInt(rejectMsg.substring(rejectMsg.lastIndexOf(",") + 1));
+                            NodeMetaData nodeTosend = getNodeFromID(nodeMetaData, lastNode);
+                            nodeTosend.msgQueue.add(rejectMsg);
+                        }
 
 
                     } else {
@@ -305,8 +325,9 @@ public class Node {
                         NodeMetaData parentNode = getNodeFromID(nodeMetaData, nodeMetaData.parentUID);
                         parentNode.msgQueue.add(msgToSendParent);
                     } else {
+                        final String _msg = message;
                         nodeMetaData.neighbors.stream().filter(nm -> nm.status == 1).forEach(nm -> {
-                            nm.msgQueue.add(message);
+                            nm.msgQueue.add(_msg);
                         });
                     }
                 } else if (message.startsWith(Messages.MIN_EDGE.value)) {
@@ -360,7 +381,7 @@ public class Node {
                             StringBuilder builder = new StringBuilder();
                             for (int i = 0; i < splitsOFCurrentMINED.length; i++) {
                                 if (i == 2) {
-                                    builder.append(nodeMetaData.uid + ","); //be aware of this ','
+                                    builder.append(nodeMetaData.uid).append(","); //be aware of this ','
                                 } else if (i == splitsOFCurrentMINED.length - 1) {
                                     builder.append(splitsOFCurrentMINED[i]);
                                 } else {
@@ -383,19 +404,59 @@ public class Node {
                         NodeMetaData parentNdoe = getNodeFromID(nodeMetaData, nodeMetaData.uid);
                         parentNdoe.msgQueue.add(message);
                     }
-                } else if ("ACCEPT" == "ACCEPT") {
+                } else if (message.startsWith(Messages.ACCEPT.value)) {
                     //PIGGYBACK to update leader UID and parenrts
                     //SEND ACK_MERGE across all nodes.
-                    // OTHER NODE, the one who sent REJECT message, on receiving a ACK_MERGE message tells its still a contentder
-                } else if (message.startsWith(Messages.ACK_MERGE.value)) {
-                    //Child node
-                    synchronizerMessenger(Messages.COMPLETE_CONTENDER.value);
+                    if (nodeMetaData.uid == nodeMetaData.leaderUID) {
+                        nodeMetaData.level++;
+                        synchronizerMessenger(Messages.COMPLETE_CONTENDER.value);
+                    } else {
+                        //1th is new leader id
+                        //Also a junction where these two components meet is also updated by this.. hopefully..
+
+                        String[] acceptMsgSplit = message.split(",");
+                        nodeMetaData.leaderUID = Integer.parseInt(acceptMsgSplit[1]);
+                        NodePointers nodePointers = getmyNewParentChildNodes(acceptMsgSplit, nodeMetaData.uid + "");
+                        nodeMetaData.parentUID = nodePointers.parentNode;
+                        NodeMetaData myNewParent = getNodeFromID(nodeMetaData, nodePointers.parentNode);
+                        NodeMetaData myNewChild = getNodeFromID(nodeMetaData, nodePointers.childNode);
+                        myNewParent.status = 0;
+                        myNewChild.status = 1;
+                    }
                 }
             }
         }
         if (nodeMetaData.leaderUID == nodeMetaData.uid) {
             mstPrint(nodeMetaData);
         }
+    }
+
+    private static NodePointers getmyNewParentChildNodes(String[] acceptMsgSplit, String id) {
+
+        for (int i = 2; i < acceptMsgSplit.length; i++) {
+            if (acceptMsgSplit[i].equals(id)) {
+                NodePointers np = new NodePointers();
+                np.parentNode = Integer.parseInt(acceptMsgSplit[i - 1]);
+                np.childNode = Integer.parseInt(acceptMsgSplit[i + 1]);
+                return np;
+            }
+        }
+        return null;
+    }
+
+    private static String rejectionOrAcceptMsgBuilder(String mainmsg, String[] msgSplist) {
+        StringBuilder rejectionMsgBuilder = new StringBuilder();
+        rejectionMsgBuilder.append(mainmsg).append(",");
+        for (int i = 1; i < msgSplist.length; i++) {
+            if (i == 2) {
+                continue;
+            }
+            rejectionMsgBuilder.append(msgSplist[i]);
+            if (i < msgSplist.length - 1) {
+                rejectionMsgBuilder.append(",");
+            }
+        }
+        return rejectionMsgBuilder.toString();
     }
 
     /***
