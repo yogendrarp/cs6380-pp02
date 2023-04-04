@@ -199,6 +199,10 @@ public class Node {
             // Secondly, a node recieves only one search message but multiple test messages, if component UID on test
             //message is greater than the component it belongs to it sends a CHECK message to its parent which
             // can be directly the leader or can be a parent in the tree
+            if(nodeMetaData.uid==nodeMetaData.leaderUID) {
+                mfsTreeConstructed = checkMsfTreeConstructed(networkInformation, phase);
+                continue;
+            }
             boolean phaseCompleted = false;
             HashMap<Integer, Integer> responseHashMap = new HashMap<>();
             nodeMetaData.neighbors.forEach(nw -> responseHashMap.put(nw.uid, -1));
@@ -429,6 +433,11 @@ public class Node {
         if (nodeMetaData.leaderUID == nodeMetaData.uid) {
             mstPrint(nodeMetaData);
         }
+    }
+
+    private static boolean checkMsfTreeConstructed(NetworkInformation networkInformation, int phase) {
+        double countOfPhases = Math.log(networkInformation.countNodes)/Math.log(2);
+        return (int) countOfPhases == phase;
     }
 
     private static NodePointers getmyNewParentChildNodes(String[] acceptMsgSplit, String id) {
