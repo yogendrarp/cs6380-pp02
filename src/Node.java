@@ -79,8 +79,6 @@ public class Node {
         });
 
 
-
-
         boolean allNodesNotConnected = true;
         while (allNodesNotConnected) {
             boolean allCon = true;
@@ -119,11 +117,6 @@ public class Node {
             shortestDistNeighbor.msgQueue.add(String.format(format, Messages.TEST, nodeMetaData.uid));
             System.out.println(String.format("Shortest neighbor node is with UID: %d", smallestDistNeighborUID));
 
-            //Phase 0
-            int counter = 0;
-            boolean synced = false, rejected = false;
-
-
 
             while (!phaseZeroCompleted) {
                 Thread.sleep(getRand() * 1000L);
@@ -135,20 +128,10 @@ public class Node {
                     continue;
                 }
 
-                if (rejected && counter == 4 && !synced) {
-                    //remove contendership because I recieved ADD message
-                    synchronizerMessenger(Messages.COMPLETE_NONCONTENDER.value);
-                }
-                counter++;
-
-
                 if (inputMessages.size() <= 0) {
                     Thread.sleep(getRand() * 100L);
                     continue;
                 }
-
-
-
 
 
                 String message = inputMessages.poll();
@@ -174,7 +157,7 @@ public class Node {
                             msgToSend = String.format(format, Messages.REJECT.value, nodeMetaData.uid);
                         }
                     } else {
-                        msgToSend = String.format(format, Messages.REJECT.value, nodeMetaData.uid);
+                        msgToSend = String.format(format, Messages.REJECTNOTMWOE.value, nodeMetaData.uid);
                     }
                     System.out.println("Message to send is " + msgToSend + " to node with UID " + recievedFrom.uid);
                     recievedFrom.msgQueue.add(msgToSend);
@@ -191,9 +174,10 @@ public class Node {
                     msgRcvdFromNode.msgQueue.add(String.format(format, Messages.ADD.value, nodeMetaData.uid));
                     System.out.println("Keeping my contendership");
                     synchronizerMessenger(Messages.COMPLETE_CONTENDER.value);
-                } else if (message.startsWith(Messages.REJECT.value)) {
+                } else if (message.startsWith(Messages.REJECTNOTMWOE.value)) {
                     //Send the synchronizer and remove your contendership
-                    rejected = true;
+                    System.out.println("Removing my contendership");
+                    synchronizerMessenger(Messages.COMPLETE_NONCONTENDER.value);
                 } else if (message.startsWith(Messages.ADD.value)) {
 
                     String[] messageSplit = message.split(",");
@@ -206,10 +190,7 @@ public class Node {
                     parentNode.status = 0;
                     System.out.println("Added node " + parentNode.uid + " as parent");
                     System.out.println("Removing my contendership");
-                    if (!synced) {
-                        synchronizerMessenger(Messages.COMPLETE_NONCONTENDER.value);
-                        synced = true;
-                    }
+                    synchronizerMessenger(Messages.COMPLETE_NONCONTENDER.value);
                 } else {
                     System.out.println("Junk message");
                 }
@@ -219,10 +200,9 @@ public class Node {
         }
 
 
-
-        Thread.sleep(getRand()*1000L);
+        Thread.sleep(getRand() * 1000L);
         System.out.println("*********************************************************************************");
-        Thread.sleep(getRand()*800L);
+        Thread.sleep(getRand() * 800L);
         boolean mfsTreeConstructed = false;
         while (!mfsTreeConstructed) {
 
@@ -258,7 +238,7 @@ public class Node {
                     System.out.println("All nodes are unmarked, sending TEST message");
                     int smallestdistNeighborUID = getSmallestDistNodeNeighborUID(nodeMetaData);
                     NodeMetaData neighborNode = getNodeFromID(nodeMetaData, smallestdistNeighborUID);
-                    neighborNode.msgQueue.add(String.format(format, Messages.TEST, nodeMetaData.uid));
+                    neighborNode.msgQueue.add(String.format("%s,%s,%s", Messages.TEST, nodeMetaData.uid, nodeMetaData.neighborUIDsAndWeights.get(smallestdistNeighborUID)));
                     responseHashMap.keySet().forEach(key -> {
                         responseHashMap.put(key, 0);
                     });
@@ -320,12 +300,15 @@ public class Node {
                         //Test message reached parent
                         int smallestWeightEdge = Integer.parseInt(msgSplist[2]);
                         int otherComponentUID = Integer.parseInt(msgSplist[1]);
-                        if (smallestWeightEdge <= myknownminedge && nodeMetaData.uid < otherComponentUID) {
+                        if (otherComponentUID == nodeMetaData.leaderUID) {
+                            //SEND SAMECOMPONENT
+                        } else if (smallestWeightEdge <= myknownminedge && nodeMetaData.uid < otherComponentUID) {
                             System.out.println("Reached 5");
                             //if my UID is smaller, I accept
                             String acceptMsg = rejectionOrAcceptMsgBuilder(Messages.ACCEPT.value, msgSplist);
                             acceptMsg = acceptMsg + "," + nodeMetaData.uid;
                             //Change my child as my parent, update my leader UID, remove my contendership done in reject
+                            System.out.println(acceptMsg); // TODO: 4/4/2023 compare 326 and 330 are they same?
                             int lastNode = Integer.parseInt(acceptMsg.substring(1 + acceptMsg.lastIndexOf(",")));
                             nodeMetaData.level++;
                             nodeMetaData.leaderUID = otherComponentUID;
@@ -336,6 +319,7 @@ public class Node {
                         } else {
                             //reject
                             String rejectMsg = rejectionOrAcceptMsgBuilder(Messages.REJECT.value, msgSplist);
+                            System.out.println(rejectMsg); // TODO: 4/4/2023
                             int lastNode = Integer.parseInt(rejectMsg.substring(rejectMsg.lastIndexOf(",") + 1));
                             NodeMetaData nodeTosend = getNodeFromID(nodeMetaData, lastNode);
                             nodeTosend.msgQueue.add(rejectMsg);
@@ -364,14 +348,19 @@ public class Node {
                 } else if (message.startsWith(Messages.SEARCH.value)) {
                     //If all my edges are not marked, send my parent the minimum of 3
                     // else forward search to marked nodes
+                    // if no nodes are -1, send COMPLETION
                     System.out.println("Received Search message from " + message);
-                    boolean alledgesunmarked = nodeMetaData.neighbors.stream().filter(nm -> nm.status == -1).count() == nodeMetaData.neighbors.size();
-                    if (alledgesunmarked) {
+                    long unmarkedEdges = nodeMetaData.neighbors.stream().filter(nm -> nm.status == -1).count();
+                    if (unmarkedEdges == nodeMetaData.neighbors.size()) {
                         int shortestdistNeighborUID = getSmallestDistNodeNeighborUID(nodeMetaData);
                         int weightOfIt = nodeMetaData.neighborUIDsAndWeights.get(shortestdistNeighborUID);
                         //MIN_EDGE,WEIGHT,MYUID,UIDOFOTHERCOMPONENT, PARENT WILL APPEND ITS
                         String msgToSendParent = String.format("%s,%s,%s,%s", Messages.MIN_EDGE.value, weightOfIt,
                                 nodeMetaData.uid, shortestdistNeighborUID);
+                        NodeMetaData parentNode = getNodeFromID(nodeMetaData, nodeMetaData.parentUID);
+                        parentNode.msgQueue.add(msgToSendParent);
+                    } else if (unmarkedEdges == 0) {
+                        String msgToSendParent = String.format("%s,%s", Messages.COMPLETED, nodeMetaData.uid);
                         NodeMetaData parentNode = getNodeFromID(nodeMetaData, nodeMetaData.parentUID);
                         parentNode.msgQueue.add(msgToSendParent);
                     } else {
@@ -473,6 +462,25 @@ public class Node {
                         myNewParent.status = 0;
                         myNewChild.status = 1;
                     }
+                } else if (message.startsWith(Messages.COMPLETED.value)) {
+                    //Mark one node completed and if all are completed send that to parent
+                    String[] msgSplit = message.split(",");
+                    int completedUid = Integer.parseInt(msgSplit[1]);
+                    NodeMetaData neighborChild = getNodeFromID(nodeMetaData, completedUid);
+                    neighborChild.status = 3;
+                    boolean allnodescompleted = nodeMetaData.neighbors.stream().filter(n -> n.status == 3).count() == nodeMetaData.neighbors.size();
+                    if (allnodescompleted) {
+                        //leadernode
+                        if (nodeMetaData.parentUID == -1) {
+                            //Terminate Tree construction
+                            mstPrint(nodeMetaData);
+                            System.exit(0);
+                        } else {
+                            NodeMetaData parentNode = getNodeFromID(nodeMetaData, nodeMetaData.parentUID);
+                            String msgToSend =  String.format("%s,%s", Messages.COMPLETED.value, nodeMetaData.uid);
+                            parentNode.msgQueue.add(msgToSend);
+                        }
+                    }
                 }
             }
         }
@@ -482,12 +490,10 @@ public class Node {
     }
 
 
-
     private static boolean checkMsfTreeConstructed(NetworkInformation networkInformation, int phase) {
         double countOfPhases = Math.log(networkInformation.countNodes) / Math.log(2);
         return (int) countOfPhases == phase;
     }
-
 
 
     private static NodePointers getmyNewParentChildNodes(String[] acceptMsgSplit, String id) {
