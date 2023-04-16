@@ -307,7 +307,7 @@ public class Node {
                             //acceptMsg = acceptMsg + "," + nodeMetaData.uid;
                             //Change my child as my parent, update my leader UID, remove my contendership done in reject
                             System.out.printf("1.Message to send %s%n", acceptMsg); // TODO: 4/4/2023 compare 326 and 330 are they same?
-                            System.out.printf("00 othercomponent UID is %d and lastnode is %d%n", otherComponentUID, lastNode);
+                            System.out.printf("othercomponent UID is %d and lastnode is %d%n", otherComponentUID, lastNode);
                             nodeMetaData.level++;
                             nodeMetaData.leaderUID = otherComponentUID;
                             nodeMetaData.parentUID = lastNode;
@@ -349,8 +349,7 @@ public class Node {
                             otherComponent.msgQueue.add(msgToSend);
                             continue;
                         }
-
-                        message = message + "," + nodeMetaData.uid;
+                        message = message + "," + nodeMetaData.parentUID;
                         System.out.printf("4.Message to send %s%n", message);
                         NodeMetaData parentNode = getNodeFromID(nodeMetaData, nodeMetaData.parentUID);
                         parentNode.msgQueue.add(message);
@@ -384,6 +383,9 @@ public class Node {
                 } else if (message.startsWith(Messages.MIN_EDGE.value)) {
                     //What if I am the parent?
                     //Must change this logic?
+                    if(nodeMetaData.leaderUID==nodeMetaData.uid && myPhaseDone) {
+                        continue;
+                    }
                     String[] msgSplits = message.split(",");
                     int minWeight = Integer.parseInt(msgSplits[1]);
                     int responseFrom = Integer.parseInt(msgSplits[2]);
