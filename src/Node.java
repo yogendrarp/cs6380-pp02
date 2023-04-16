@@ -270,7 +270,8 @@ public class Node {
                 Thread.sleep(5000);
 
                 if (inputMessages.isEmpty()) {
-                    Thread.sleep(500);
+                    Thread.sleep(1000);
+                    System.out.println("wait....");
                     continue;
                 }
                 //how will a child node deal with all responses like the above hashmap
@@ -317,6 +318,8 @@ public class Node {
                             System.out.printf("Added node %d as my parent and %d as my component leader %n",
                                     nodeMetaData.parentUID, nodeMetaData.leaderUID);
                             myPhaseDone = true;
+                            System.out.println("**** Removing my contendership");
+                            synchronizerMessenger(Messages.COMPLETE_NONCONTENDER.value);
                         } else {
                             //reject
                             String rejectMsg = rejectionOrAcceptMsgBuilder(Messages.REJECT.value, msgSplist);
@@ -453,6 +456,7 @@ public class Node {
                     //remove contendership
                     //REJECT->REJECTERCOMPONENT->ITSFIRSTCHILD->ITSSECONDCHILD->.....LASTCHILDBEFORE->REJECTEDCOMPONENT
                     if (nodeMetaData.uid == nodeMetaData.leaderUID) {
+                        System.out.println("***** Removing contendership");
                         synchronizerMessenger(Messages.COMPLETE_NONCONTENDER.value);
                     } else {
                         NodeMetaData parentNode = getNodeFromID(nodeMetaData, nodeMetaData.parentUID);
@@ -464,6 +468,7 @@ public class Node {
                     if (nodeMetaData.uid == nodeMetaData.leaderUID) {
                         System.out.println("Curently a leader with added child node");
                         nodeMetaData.level++;
+                        System.out.println("**** Keeping my contendership");
                         synchronizerMessenger(Messages.COMPLETE_CONTENDER.value);
                         myPhaseDone = true;
                     } else {
