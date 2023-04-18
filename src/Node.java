@@ -272,6 +272,10 @@ public class Node {
                     Thread.sleep(10000);
                     break;
                 }
+                if(phase>=5){
+                    System.out.println("MST completed");
+                    System.exit(0);
+                }
                 Thread.sleep(5000);
 
                 if (inputMessages.isEmpty()) {
@@ -296,6 +300,10 @@ public class Node {
                             String msgToSend = String.format("%s,%s", Messages.SAMECOMPONENT.value, nodeMetaData.uid);
                             System.out.printf("Msg to send %s%n", msgToSend);
                             otherComponent.msgQueue.add(msgToSend);
+                        } else if (nodeMetaData.uid == Integer.parseInt(msgSplist[msgSplist.length - 1]) && nodeMetaData.leaderUID == Integer.parseInt(msgSplist[1])) {
+                            int lastToLastNode = Integer.parseInt(msgSplist[msgSplist.length - 2]);
+                            NodeMetaData getLastNode = getNodeFromID(nodeMetaData, lastToLastNode);
+                            getLastNode.msgQueue.add(String.format("%s,%s", Messages.SAMECOMPONENT, nodeMetaData.uid));
                         } else if (smallestWeightEdge <= myknownminedge && nodeMetaData.uid < otherComponentUID && !myPhaseDone) {
                             //Deal with currentknownminstring
                             System.out.println("Reached 5");
@@ -402,6 +410,15 @@ public class Node {
                         String msgToSendParent = String.format("%s,%s", Messages.COMPLETED, nodeMetaData.uid);
                         NodeMetaData parentNode = getNodeFromID(nodeMetaData, nodeMetaData.parentUID);
                         parentNode.msgQueue.add(msgToSendParent);
+                    } else if (unmarkedEdges == 1) {
+                        NodeMetaData thelastNeighbor = nodeMetaData.neighbors.stream().filter(i -> i.status == -1).findFirst().orElse(null);
+                        if (thelastNeighbor != null) {
+                            String msgToSendParent = String.format("%s,%s,%s,%s", Messages.MIN_EDGE.value, nodeMetaData.neighborUIDsAndWeights.get(thelastNeighbor.uid),
+                                    nodeMetaData.uid, thelastNeighbor.uid);
+                            NodeMetaData parentNode = getNodeFromID(nodeMetaData, nodeMetaData.parentUID);
+                            System.out.printf("5.Message to send %s%n", msgToSendParent);
+                            parentNode.msgQueue.add(msgToSendParent);
+                        }
                     } else {
                         final String _msg = message;
                         System.out.printf("6.Message to send %s%n", _msg);
@@ -495,7 +512,7 @@ public class Node {
                     else {
                         //Message to send REJECT,5,8,184,200
                         String[] msgSplit = message.split(",");
-                        if(Integer.parseInt(msgSplit[1])==nodeMetaData.uid){
+                        if (Integer.parseInt(msgSplit[1]) == nodeMetaData.uid) {
                             continue;
                         }
                         for (int i = 1; i < msgSplit.length; i++) {
@@ -564,6 +581,11 @@ public class Node {
                     nodeMetaData.leaderUID = leaderUID;
                     final String _msg = message;
                     nodeMetaData.neighbors.stream().filter(n -> n.status == 1).forEach(n -> n.msgQueue.add(_msg));
+                } else if (message.startsWith(Messages.SAMECOMPONENT.value)) {
+                    String[] msgSplit = message.split(",");
+                    int node = Integer.parseInt(msgSplit[1]);
+                    NodeMetaData getNode = getNodeFromID(nodeMetaData, node);
+                    getNode.status = 2;
                 }
             }
         }
@@ -642,10 +664,12 @@ public class Node {
     static int getSmallestDistNodeNeighborUID(NodeMetaData nodeMetaData, int parentuid) {
         int smallestDistNeighborDistance = Integer.MAX_VALUE; // distam
         int smallestDistNeighborUID = Integer.MIN_VALUE; // this should not be UID, its okay here
-
+        HashSet<Integer> unknowns = new HashSet<>();
+        nodeMetaData.neighbors.stream().filter(i -> i.status == -1).forEach(i -> unknowns.add(i.uid));
 
         List<Integer> keys = nodeMetaData.neighborUIDsAndWeights.keySet().stream().toList();
         for (int _tempUID : keys) {
+            if(!unknowns.contains(_tempUID)) {continue;}
             int _val = nodeMetaData.neighborUIDsAndWeights.get(_tempUID);
             if ((_tempUID != parentuid) && ((smallestDistNeighborDistance > _val)
                     ||
