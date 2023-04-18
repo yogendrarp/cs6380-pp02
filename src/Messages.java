@@ -13,7 +13,8 @@ public enum Messages {
     COMPLETE_NONCONTENDER("COMPLETE,NONCONTENDER"),
     SEARCH("SEARCH"),
     ACK_MERGE("ACK_MERGE"),
-    MIN_EDGE("MIN_EDGE")
+    MIN_EDGE("MIN_EDGE"),
+    CHANGE_LEADER("CHANGE_LEADER")
     ;
 
     String value;

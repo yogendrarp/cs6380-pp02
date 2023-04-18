@@ -175,6 +175,8 @@ public class Node {
                     msgRcvdFromNode.msgQueue.add(String.format(format, Messages.ADD.value, nodeMetaData.uid));
                     System.out.println("Keeping my contendership");
                     synchronizerMessenger(Messages.COMPLETE_CONTENDER.value);
+
+
                 } else if (message.startsWith(Messages.REJECTNOTMWOE.value)) {
                     //Send the synchronizer and remove your contendership
                     System.out.println("Keeping my contendership");
@@ -222,7 +224,7 @@ public class Node {
                 System.out.println("MFS not constructed but I am currently a leader " + nodeMetaData.uid);
                 mstPrint(nodeMetaData);
             } else {
-                System.out.printf("%d uid is part of some component %d%n", nodeMetaData.uid, nodeMetaData.parentUID);
+                System.out.printf("%d uid is part of some component %d%n", nodeMetaData.uid, nodeMetaData.leaderUID);
             }
             System.out.printf("Current phase is %d%n", phase);
             boolean phaseCompleted = false;
@@ -315,11 +317,17 @@ public class Node {
                             nodeMetaData.parentUID = lastNode;
                             NodeMetaData parentNode = getNodeFromID(nodeMetaData, lastNode);
                             parentNode.status = 0;
+                            System.out.printf("Send %s to my parent %d%n", acceptMsg, nodeMetaData.parentUID);
                             parentNode.msgQueue.add(acceptMsg);
                             System.out.printf("Added node %d as my parent and %d as my component leader %n",
                                     nodeMetaData.parentUID, nodeMetaData.leaderUID);
                             myPhaseDone = true;
                             System.out.println("**** Removing my contendership");
+                            String msgToSend = String.format("%s,%d", Messages.CHANGE_LEADER, nodeMetaData.leaderUID);
+                            nodeMetaData.neighbors.stream().filter(nmd -> nmd.status == 1).forEach(nm1 -> {
+                                nm1.msgQueue.add(msgToSend);
+                            });
+                            //Send change leader to child nodes
                             synchronizerMessenger(Messages.COMPLETE_NONCONTENDER.value);
                         } else {
                             //reject
@@ -347,17 +355,33 @@ public class Node {
                         //TEST,COMPONENTUID, WEIGHT, path....
                         int smallestWeightEdge = Integer.parseInt(msgSplist[2]);
                         int otherComponentUID = Integer.parseInt(msgSplist[1]);
-                        if (otherComponentUID == nodeMetaData.leaderUID) {
+                        int lastNode = Integer.parseInt(msgSplist[msgSplist.length - 1]);
+                        System.out.println("Last node in the message is " + lastNode);
+                        if (otherComponentUID == nodeMetaData.leaderUID && lastNode == nodeMetaData.uid) {
                             NodeMetaData otherComponent = getNodeFromID(nodeMetaData, otherComponentUID);
                             String msgToSend = String.format("%s,%s", Messages.SAMECOMPONENT.value, nodeMetaData.uid);
                             System.out.printf("3.Message to send %s%n", message);
                             otherComponent.msgQueue.add(msgToSend);
-                            continue;
+                        } else if (lastNode == nodeMetaData.uid) {
+                            message = message + "," + nodeMetaData.parentUID;
+                            System.out.printf("4.Message to send %s%n", message);
+                            NodeMetaData parentNode = getNodeFromID(nodeMetaData, nodeMetaData.parentUID);
+                            parentNode.msgQueue.add(message);
+                        } else {
+                            int k = -1;
+                            for (int i = 1; i < msgSplist.length; i++) {
+                                if (nodeMetaData.uid == Integer.parseInt(msgSplist[i])) {
+                                    k = i + 1;
+                                    break;
+                                }
+                            }
+                            if (k == -1 || k >= msgSplist.length) {
+                                System.out.println(k + " : Fatal error");
+                            } else {
+                                NodeMetaData pathnode = getNodeFromID(nodeMetaData, Integer.parseInt(msgSplist[k]));
+                                pathnode.msgQueue.add(message);
+                            }
                         }
-                        message = message + "," + nodeMetaData.parentUID;
-                        System.out.printf("4.Message to send %s%n", message);
-                        NodeMetaData parentNode = getNodeFromID(nodeMetaData, nodeMetaData.parentUID);
-                        parentNode.msgQueue.add(message);
                     }
                 } else if (message.startsWith(Messages.SEARCH.value)) {
                     //If all my edges are not marked, send my parent the minimum of 3
@@ -376,7 +400,7 @@ public class Node {
                         NodeMetaData parentNode = getNodeFromID(nodeMetaData, nodeMetaData.parentUID);
                         System.out.printf("5.Message to send %s%n", msgToSendParent);
                         parentNode.msgQueue.add(msgToSendParent);
-                    } else if (completedneighbors == nodeMetaData.neighbors.size() - 1) {
+                    } else if (completedneighbors == nodeMetaData.neighbors.size() - 1) { //1 is parent in this
                         System.out.println("Print 2");
                         String msgToSendParent = String.format("%s,%s", Messages.COMPLETED, nodeMetaData.uid);
                         NodeMetaData parentNode = getNodeFromID(nodeMetaData, nodeMetaData.parentUID);
@@ -489,15 +513,22 @@ public class Node {
                     } else {
                         //1th is new leader id
                         //Also a junction where these two components meet is also updated by this.. hopefully..
+                        System.out.println("Lalalalallalal" + message);
                         String[] acceptMsgSplit = message.split(",");
                         nodeMetaData.leaderUID = Integer.parseInt(acceptMsgSplit[1]);
+                        System.out.println("Updating new leader"+ nodeMetaData.leaderUID);
                         NodePointers nodePointers = getmyNewParentChildNodes(acceptMsgSplit, nodeMetaData.uid + "");
+                        System.out.println("New parent "+ nodePointers.parentNode+" new child "+ nodePointers.childNode);
                         nodeMetaData.parentUID = nodePointers.parentNode;
                         NodeMetaData myNewParent = getNodeFromID(nodeMetaData, nodePointers.parentNode);
                         NodeMetaData myNewChild = getNodeFromID(nodeMetaData, nodePointers.childNode);
                         myNewParent.status = 0;
                         myNewChild.status = 1;
                         System.out.printf("Adding %d as my parent and %d as my child%n", myNewParent.uid, myNewChild.uid);
+                        myNewParent.msgQueue.add(message);
+                        System.out.println("Informing my children if any to change leader");
+                        final String changeLedaer = String.format("%s,%d",Messages.CHANGE_LEADER,nodeMetaData.leaderUID);
+                        nodeMetaData.neighbors.stream().filter(i->i.status==1).forEach(i->i.msgQueue.add(changeLedaer));
                     }
                 } else if (message.startsWith(Messages.COMPLETED.value)) {
                     //Mark one node completed and if all are completed send that to parent
@@ -518,6 +549,12 @@ public class Node {
                             parentNode.msgQueue.add(msgToSend);
                         }
                     }
+                } else if (message.startsWith(Messages.CHANGE_LEADER.value)) {
+                    String[] msgSplit = message.split(",");
+                    int leaderUID = Integer.parseInt(msgSplit[1]);
+                    nodeMetaData.leaderUID = leaderUID;
+                    final String _msg = message;
+                    nodeMetaData.neighbors.stream().filter(n -> n.status == 1).forEach(n -> n.msgQueue.add(_msg));
                 }
             }
         }
